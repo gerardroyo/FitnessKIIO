@@ -1,10 +1,15 @@
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { deleteSession, getUserSessions } from '@/lib/firestore'; // Import firestore functions
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
-import { Calendar, Plus, Trophy, Activity, History, Trash2, Dumbbell, Notebook, User, Flame } from 'lucide-react';
+import { deleteSession, getUserSessions } from '@/lib/firestore';
+import { useAuth } from '@/context/AuthContext';
+import { Calendar, Plus, Trophy, Activity, History, Dumbbell, Notebook, User, Flame, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatedNumber } from './AnimatedNumber';
+import { HistoryItemSkeleton } from './Skeleton';
+import { ConfirmModal } from './ConfirmModal';
+import { SwipeableRow } from './SwipeableRow';
 
 interface DashboardViewProps {
     onStart: () => void;
@@ -15,16 +20,19 @@ export function DashboardView({ onStart }: DashboardViewProps) {
     const { user } = useAuth();
     const [timeRange, setTimeRange] = useState<'1S' | '1M' | '3M' | '1A' | 'ALL'>('ALL');
     const [history, setHistory] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; sessionId: string | null }>({
+        isOpen: false,
+        sessionId: null
+    });
 
     useEffect(() => {
         if (!user) return;
+        setIsLoading(true);
         async function fetchHistory() {
-            // Fetch last 100 sessions for dashboard stats (should be enough for immediate view)
-            // Or maybe 365? Let's do 100 for now.
             const sessions = await getUserSessions(user!.uid, 100);
             const completed = sessions.filter(s => s.state === 'completed');
 
-            // Enrich with volume calculation
             const enriched = completed.map(session => {
                 const volume = session.entries.reduce((acc, entry) => {
                     return acc + entry.sets.reduce((sAcc, set) => sAcc + (set.isCompleted ? set.weight * set.reps : 0), 0);
@@ -32,22 +40,24 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                 return { ...session, volume };
             });
             setHistory(enriched);
+            setIsLoading(false);
         }
         fetchHistory();
     }, [user]);
 
-    const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
+    const handleDeleteClick = (e: React.MouseEvent, sessionId: string) => {
         e.stopPropagation();
-        if (!user) return;
-        if (window.confirm('¿Borrar esta sesión permanentemente?')) {
-            await deleteSession(user.uid, sessionId);
-            // Optimistic update
-            setHistory(prev => prev.filter(s => s.id !== sessionId));
-        }
+        setDeleteModal({ isOpen: true, sessionId });
     };
 
-    const chartData = (() => {
-        if (!history) return [];
+    const handleConfirmDelete = async () => {
+        if (!user || !deleteModal.sessionId) return;
+        await deleteSession(user.uid, deleteModal.sessionId);
+        setHistory(prev => prev.filter(s => s.id !== deleteModal.sessionId));
+    };
+
+    const { filteredHistory, chartData } = (() => {
+        if (!history) return { filteredHistory: [], chartData: [] };
 
         const now = new Date();
         let cutoffDate: Date | null = null;
@@ -64,16 +74,30 @@ export function DashboardView({ onStart }: DashboardViewProps) {
             ? history.filter(s => s.startTime >= cutoffDate!.getTime())
             : history;
 
-        return [...filtered].reverse().map(s => ({
-            date: new Date(s.startTime).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
-            volume: s.volume,
-            duration: Math.round((s.durationSeconds || 0) / 60),
-            rawDate: s.startTime
-        }));
+        // Group by date
+        const grouped = filtered.reduce((acc, s) => {
+            const dateStr = new Date(s.startTime).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+            if (!acc[dateStr]) {
+                acc[dateStr] = { date: dateStr, durationSeconds: 0, rawDate: s.startTime };
+            }
+            acc[dateStr].durationSeconds += (s.durationSeconds || 0);
+            return acc;
+        }, {} as Record<string, any>);
+
+        const data = Object.values(grouped)
+            .sort((a: any, b: any) => a.rawDate - b.rawDate)
+            .map((item: any) => ({
+                ...item,
+                duration: Math.round(item.durationSeconds / 60)
+            }));
+
+        return { filteredHistory: filtered, chartData: data };
     })();
 
+    const totalDuration = filteredHistory.reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
+    const totalMinutes = Math.round(totalDuration / 60);
+
     const totalSessions = history?.length || 0;
-    const lastSession = history?.[0];
 
     // Streak Calculation
     const streak = (() => {
@@ -103,7 +127,11 @@ export function DashboardView({ onStart }: DashboardViewProps) {
     return (
         <div className="flex flex-col min-h-screen relative pb-24">
             {/* Header */}
-            <header className="p-6 pt-8 flex justify-between items-start">
+            <motion.header
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-6 pt-8 flex justify-between items-start"
+            >
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-[var(--color-text-muted)] bg-clip-text text-transparent">
                         Mi Progreso
@@ -111,34 +139,36 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                     <p className="text-[var(--color-text-muted)]">Consistencia es la clave</p>
                 </div>
                 <div className="flex gap-2">
-                    <button
-                        onClick={() => router.push('/routines')}
-                        className="p-2 rounded-lg bg-[var(--color-surface)] border border-[rgba(255,255,255,0.05)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
-                        title="Mis rutinas"
-                    >
-                        <Notebook size={20} />
-                    </button>
-                    <button
-                        onClick={() => router.push('/exercises')}
-                        className="p-2 rounded-lg bg-[var(--color-surface)] border border-[rgba(255,255,255,0.05)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
-                        title="Ver ejercicios"
-                    >
-                        <Dumbbell size={20} />
-                    </button>
-                    <button
-                        onClick={() => router.push('/profile')}
-                        className="p-2 rounded-lg bg-[var(--color-surface)] border border-[rgba(255,255,255,0.05)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
-                        title="Mi Perfil"
-                    >
-                        <User size={20} />
-                    </button>
+                    {[
+                        { icon: Notebook, path: '/routines', title: 'Mis rutinas' },
+                        { icon: Dumbbell, path: '/exercises', title: 'Ver ejercicios' },
+                        { icon: User, path: '/profile', title: 'Mi Perfil' }
+                    ].map((item, idx) => (
+                        <motion.button
+                            key={item.path}
+                            onClick={() => router.push(item.path)}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: idx * 0.1 }}
+                            className="p-2 rounded-lg bg-[var(--color-surface)] border border-[rgba(255,255,255,0.05)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
+                            title={item.title}
+                        >
+                            <item.icon size={20} />
+                        </motion.button>
+                    ))}
                 </div>
-            </header>
+            </motion.header>
 
             <div className="px-4 space-y-6 flex-1 overflow-y-auto">
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-2 gap-4">
-                    <div
+                    <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ delay: 0.1 }}
                         onClick={() => router.push('/consistency')}
                         className="bg-[var(--color-surface)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)] active:scale-95 transition-transform cursor-pointer"
                     >
@@ -146,9 +176,15 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                             <Trophy size={16} />
                             <span className="text-[10px] font-bold uppercase tracking-wider">SESIONES</span>
                         </div>
-                        <p className="text-2xl font-bold text-white">{totalSessions}</p>
-                    </div>
-                    <div
+                        <p className="text-2xl font-bold text-white">
+                            <AnimatedNumber value={totalSessions} />
+                        </p>
+                    </motion.div>
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ delay: 0.1 }}
                         onClick={() => router.push('/consistency')}
                         className="bg-[var(--color-surface)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)] active:scale-95 transition-transform cursor-pointer"
                     >
@@ -156,12 +192,19 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                             <Flame size={16} fill={streak > 0 ? "currentColor" : "none"} />
                             <span className="text-[10px] font-bold uppercase tracking-wider">RACHA</span>
                         </div>
-                        <p className="text-2xl font-bold text-white">{streak} <span className="text-xs font-normal text-[var(--color-text-muted)]">días</span></p>
-                    </div>
+                        <p className="text-2xl font-bold text-white">
+                            <AnimatedNumber value={streak} /> <span className="text-xs font-normal text-[var(--color-text-muted)]">días</span>
+                        </p>
+                    </motion.div>
                 </div>
 
                 {/* Chart Section */}
-                <div className="bg-[var(--color-surface)] rounded-xl p-4 border border-[rgba(255,255,255,0.05)]">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-[var(--color-surface)] rounded-xl p-4 border border-[rgba(255,255,255,0.05)]"
+                >
                     {/* Filters - Attached to Chart */}
                     <div className="flex justify-between items-center mb-4">
                         <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Tiempo de Entreno</span>
@@ -181,15 +224,15 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                         </div>
                     </div>
 
-                    {/* Last Session Duration */}
+                    {/* Total Duration for Range */}
                     <div className="flex items-end gap-2 mb-2">
                         <span className="text-3xl font-bold font-mono">
-                            {lastSession ? Math.floor((lastSession.durationSeconds || 0) / 60) : '0'}
+                            <AnimatedNumber value={totalMinutes} />
                             <span className="text-lg text-[var(--color-text-muted)] ml-1">min</span>
                         </span>
                     </div>
 
-                    <div className="h-48 w-full">
+                    <div className="h-48 w-full [&_.recharts-wrapper]:!outline-none">
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData}>
@@ -202,7 +245,8 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                                     <XAxis dataKey="date" hide />
                                     <YAxis hide domain={['dataMin', 'auto']} />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: '#11221a', border: 'none', borderRadius: '8px', color: '#fff' }}
+                                        contentStyle={{ backgroundColor: '#11221a', border: 'none', borderRadius: '8px', color: '#fff', outline: 'none' }}
+                                        cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }}
                                         itemStyle={{ color: '#00ff80' }}
                                         formatter={(value: any) => [`${value} min`, 'Tiempo']}
                                         labelFormatter={(label) => label}
@@ -223,7 +267,7 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                             </div>
                         )}
                     </div>
-                </div>
+                </motion.div>
 
                 {/* History List */}
                 <div>
@@ -234,48 +278,94 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                         </div>
                     </div>
 
-                    <div className="space-y-3 pb-24">
-                        {history && history.map((session) => (
-                            <div
-                                key={session.id}
-                                onClick={() => router.push(`/session/${session.id}`)}
-                                className="bg-[var(--color-surface)] p-4 rounded-xl flex justify-between items-center active:scale-98 transition-transform border border-[rgba(255,255,255,0.05)] cursor-pointer hover:border-[var(--color-primary)]/30"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-full bg-[#1f3a2f] flex items-center justify-center text-[var(--color-primary)]">
-                                        <Calendar size={18} />
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-white">{session.name}</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
-                                            {new Date(session.startTime).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} • {Math.floor((session.durationSeconds || 0) / 60)} min
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={(e) => handleDelete(e, session.id)}
-                                        className="p-2 text-[var(--color-text-muted)] hover:text-red-500 hover:bg-[rgba(255,0,0,0.1)] rounded-lg transition-colors"
+                    {isLoading ? (
+                        <div className="space-y-3">
+                            {[1, 2, 3].map((i) => (
+                                <HistoryItemSkeleton key={i} />
+                            ))}
+                        </div>
+                    ) : (
+                        <motion.div
+                            initial="hidden"
+                            animate="show"
+                            variants={{
+                                hidden: { opacity: 0 },
+                                show: {
+                                    opacity: 1,
+                                    transition: {
+                                        staggerChildren: 0.05
+                                    }
+                                }
+                            }}
+                            className="space-y-3 pb-24"
+                        >
+                            <AnimatePresence mode="popLayout">
+                                {history && history.map((session) => (
+                                    <motion.div
+                                        key={session.id}
+                                        layout
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        exit={{ opacity: 0, x: -100, transition: { duration: 0.2 } }}
                                     >
-                                        <Trash2 size={18} />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                                        <SwipeableRow
+                                            onDelete={() => {
+                                                setDeleteModal({ isOpen: true, sessionId: session.id });
+                                            }}
+                                        >
+                                            <div
+                                                onClick={() => router.push(`/session/${session.id}`)}
+                                                className="p-4 flex justify-between items-center cursor-pointer"
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-full bg-[#1f3a2f] flex items-center justify-center text-[var(--color-primary)]">
+                                                        <Calendar size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-white">{session.name}</p>
+                                                        <p className="text-xs text-[var(--color-text-muted)]">
+                                                            {new Date(session.startTime).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} • {Math.round((session.durationSeconds || 0) / 60)} min
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <ChevronRight size={20} className="text-[var(--color-text-muted)]" />
+                                            </div>
+                                        </SwipeableRow>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
+                        </motion.div>
+                    )}
                 </div>
             </div>
 
             {/* Floating Action Button */}
             <div className="fixed bottom-6 left-4 right-4 z-20">
-                <button
+                <motion.button
+                    initial={{ y: 100 }}
+                    animate={{ y: 0 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ type: "spring", stiffness: 200, damping: 20 }}
                     onClick={onStart}
-                    className="w-full bg-[var(--color-primary)] text-black font-bold py-4 rounded-[var(--radius-button)] flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(0,255,128,0.3)] active:scale-95 transition-transform"
+                    className="w-full bg-[var(--color-primary)] text-black font-bold py-4 rounded-[var(--radius-button)] flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(0,255,128,0.3)]"
                 >
                     <Plus strokeWidth={3} />
                     Nueva Sesión
-                </button>
+                </motion.button>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={deleteModal.isOpen}
+                onClose={() => setDeleteModal({ isOpen: false, sessionId: null })}
+                onConfirm={handleConfirmDelete}
+                title="¿Eliminar sesión?"
+                message="Esta acción no se puede deshacer. ¿Estás seguro de que quieres borrar esta sesión?"
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+            />
         </div>
     );
 }

@@ -9,6 +9,8 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { SwipeableRow } from '@/components/SwipeableRow';
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -16,6 +18,10 @@ export default function ProfilePage() {
     const [weightInput, setWeightInput] = useState('');
     const [isAdding, setIsAdding] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [deleteWeightModal, setDeleteWeightModal] = useState<{ isOpen: boolean; id: string | null }>({
+        isOpen: false,
+        id: null
+    });
 
     const handleLogoutClick = () => {
         setShowLogoutModal(true);
@@ -60,16 +66,17 @@ export default function ProfilePage() {
         }
     };
 
-    const handleDelete = async (id?: string | number) => {
-        if (!id || !user) return;
-        if (confirm('¿Eliminar este registro?')) {
-            try {
-                // Determine if it is string (Firestore) to delete. Dexie IDs (number) won't be in Firestore.
-                // Since we only query Firestore now, ID should be string.
-                await deleteWeightRecord(user.uid, String(id));
-            } catch (error) {
-                console.error("Error deleting weight:", error);
-            }
+    const handleDeleteClick = (id?: string | number) => {
+        if (!id) return;
+        setDeleteWeightModal({ isOpen: true, id: String(id) });
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteWeightModal.id || !user) return;
+        try {
+            await deleteWeightRecord(user.uid, deleteWeightModal.id);
+        } catch (error) {
+            console.error("Error deleting weight:", error);
         }
     };
 
@@ -217,22 +224,28 @@ export default function ProfilePage() {
                             Historial
                         </h3>
                         <div className="space-y-2">
-                            {weightRecords?.map((record) => (
-                                <div key={record.id} className="bg-[var(--color-surface)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)] flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold text-lg text-white">{record.weight} kg</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
-                                            {new Date(record.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={() => handleDelete(record.id)}
-                                        className="p-2 text-[var(--color-text-muted)] hover:text-red-400"
+                            <AnimatePresence mode="popLayout">
+                                {weightRecords?.map((record) => (
+                                    <motion.div
+                                        key={record.id}
+                                        layout
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, x: -100, transition: { duration: 0.2 } }}
                                     >
-                                        <Trash2 size={18} />
-                                    </button>
-                                </div>
-                            ))}
+                                        <SwipeableRow onDelete={() => handleDeleteClick(record.id)}>
+                                            <div className="bg-[var(--color-surface)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)] flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-bold text-lg text-white">{record.weight} kg</p>
+                                                    <p className="text-xs text-[var(--color-text-muted)]">
+                                                        {new Date(record.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </SwipeableRow>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
                             {(!weightRecords || weightRecords.length === 0) && (
                                 <p className="text-[var(--color-text-muted)] text-sm italic">No hay registros aún.</p>
                             )}
@@ -240,6 +253,18 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </div>
+
+            {/* Delete Weight Confirmation Modal */}
+            <ConfirmModal
+                isOpen={deleteWeightModal.isOpen}
+                onClose={() => setDeleteWeightModal({ isOpen: false, id: null })}
+                onConfirm={handleConfirmDelete}
+                title="¿Eliminar registro?"
+                message="Este registro de peso se eliminará permanentemente."
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+            />
             {/* Logout Confirmation Modal */}
             <AnimatePresence>
                 {showLogoutModal && (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { WorkoutSession, Exercise, Routine } from '@/lib/db'; // Keep interfaces
 import { updateSession, updateRoutine, addUserRoutine } from '@/lib/firestore'; // Firestore actions
 import { useExercises, useRoutines } from '@/hooks/useFirestore'; // Firestore hooks
@@ -63,6 +64,7 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
 
     const totalExercises = exerciseIds.length;
     const progressPercent = totalExercises > 0 ? (completedCount / totalExercises) * 100 : 0;
+    const dashOffset = 175.9 - (175.9 * progressPercent) / 100;
 
     const navigateToExercise = (exerciseId: string | number) => {
         router.push(`/exercise/${exerciseId}`);
@@ -81,11 +83,7 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     };
 
     const handleFinishClick = () => {
-        if (hasChanges) {
-            setShowFinishModal(true);
-        } else {
-            finishSession();
-        }
+        setShowFinishModal(true);
     };
 
     const finishSession = async () => {
@@ -101,19 +99,7 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
 
     const updateExistingRoutine = async () => {
         if (!user || !routine) return;
-        // exerciseIds are strings, updateRoutine likely expects numbers if we didn't update types?
-        // We updated types in db.ts to number | string.
-        await updateRoutine(user.uid, String(routine.id), { exerciseIds: exerciseIds.map(Number) }); // Still map to Number? Firestore ID are strings.
-        // Wait, exerciseIds in Routine are number[] in interface?
-        // In db.ts: exerciseIds: number[].
-        // I should update Routine interface too if I want strings.
-        // Let's assume for now we keep using what we have, but Firestore IDs are strings.
-        // If I try to save strings into number[], TS might complain or Firestore will save strings anyway.
-        // Let's coerce to any or update interface properly in a follow up if needed.
-        // Actually I updated ID type but not exerciseIds array type.
-        // Let's fix that in this edit too if possible or in db.ts.
         await updateRoutine(user.uid, String(routine.id), { exerciseIds: exerciseIds.map(id => isNaN(Number(id)) ? id : Number(id)) as any });
-
         await finishSession();
     };
 
@@ -124,7 +110,6 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
                 name,
                 exerciseIds: exerciseIds.map(id => isNaN(Number(id)) ? id : Number(id)) as any
             });
-            // Update session name and link to new routine
             await updateSession(user.uid, String(session.id), {
                 name,
                 routineId: newRoutineId
@@ -136,9 +121,9 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     if (!exercises) return <div className="p-6">Cargando...</div>;
 
     return (
-        <div className="flex flex-col h-full bg-[var(--color-background)]">
+        <div className="min-h-screen bg-[var(--color-background)] relative">
             {/* Header */}
-            <header className="flex items-center justify-between p-4 bg-[var(--color-background)] sticky top-0 z-10">
+            <header className="flex items-center justify-between p-4 bg-[var(--color-background)] fixed top-0 left-0 right-0 z-50 max-w-md mx-auto">
                 <div className="flex items-center gap-2">
                     <ChevronLeft
                         className="text-white cursor-pointer"
@@ -154,7 +139,7 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
                 </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-6">
+            <div className="pt-16 px-4 pb-24 space-y-6">
                 {/* Progress Card */}
                 <div className="bg-[var(--color-surface)] rounded-[var(--radius-card)] p-5 card-shadow relative overflow-hidden">
                     <div className="flex justify-between items-start relative z-10">
@@ -174,14 +159,15 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
                         <div className="w-16 h-16 relative flex items-center justify-center">
                             <svg className="w-full h-full transform -rotate-90">
                                 <circle cx="32" cy="32" r="28" stroke="var(--color-surface-hover)" strokeWidth="6" fill="none" />
-                                <circle
+                                <motion.circle
                                     cx="32" cy="32" r="28"
                                     stroke="var(--color-primary)"
                                     strokeWidth="6"
                                     fill="none"
                                     strokeDasharray="175.9"
-                                    strokeDashoffset={175.9 - (175.9 * progressPercent) / 100}
-                                    className="transition-all duration-500 ease-out"
+                                    initial={{ strokeDashoffset: 175.9 }}
+                                    animate={{ strokeDashoffset: dashOffset }}
+                                    transition={{ duration: 1.5, ease: "circOut" }}
                                 />
                             </svg>
                             <span className="absolute text-xs font-bold">{Math.round(progressPercent)}%</span>
@@ -189,9 +175,11 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
                     </div>
 
                     <div className="mt-4 h-1.5 bg-[#1f3a2f] rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-[var(--color-primary)] transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
+                        <motion.div
+                            className="h-full bg-[var(--color-primary)]"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${progressPercent}%` }}
+                            transition={{ duration: 1.5, ease: "circOut" }}
                         />
                     </div>
                 </div>
@@ -265,121 +253,194 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
             </div>
 
             {/* Notes Modal */}
-            {showNotesModal && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-end">
-                    <div className="bg-[var(--color-background)] w-full rounded-t-3xl overflow-hidden">
-                        <div className="sticky top-0 bg-[var(--color-background)] p-4 border-b border-[rgba(255,255,255,0.05)] flex justify-between items-center">
-                            <h2 className="font-bold text-lg">Notas de la sesión</h2>
-                            <button onClick={() => setShowNotesModal(false)}>
-                                <X size={24} />
-                            </button>
-                        </div>
-                        <div className="p-4">
-                            <textarea
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Escribe aquí tus notas... (ej: Hoy me sentía cansado)"
-                                className="w-full h-32 bg-[var(--color-surface)] rounded-xl p-4 text-white placeholder:text-[var(--color-text-muted)] outline-none resize-none border border-[rgba(255,255,255,0.05)]"
-                            />
-                            <button
-                                onClick={handleSaveNotes}
-                                className="w-full mt-4 bg-[var(--color-primary)] text-black font-bold py-3 rounded-xl"
-                            >
-                                Guardar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <AnimatePresence>
+                {showNotesModal && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/80 z-50"
+                            onClick={() => setShowNotesModal(false)}
+                        />
+                        <motion.div
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                            className="fixed bottom-0 left-0 right-0 bg-[var(--color-background)] rounded-t-3xl overflow-hidden z-50"
+                        >
+                            <div className="flex justify-center pt-3 pb-1">
+                                <div className="w-10 h-1 bg-[#3a3a3c] rounded-full" />
+                            </div>
+                            <div className="p-4 border-b border-[rgba(255,255,255,0.05)] flex justify-between items-center">
+                                <h2 className="font-bold text-lg">Notas de la sesión</h2>
+                                <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowNotesModal(false)}>
+                                    <X size={24} />
+                                </motion.button>
+                            </div>
+                            <div className="p-4">
+                                <textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="Escribe aquí tus notas... (ej: Hoy me sentía cansado)"
+                                    className="w-full h-32 bg-[var(--color-surface)] rounded-xl p-4 text-white placeholder:text-[var(--color-text-muted)] outline-none resize-none border border-[rgba(255,255,255,0.05)]"
+                                />
+                                <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={handleSaveNotes}
+                                    className="w-full mt-4 bg-[var(--color-primary)] text-black font-bold py-3 rounded-xl"
+                                >
+                                    Guardar
+                                </motion.button>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
 
             {/* Add Exercise Modal */}
-            {showAddExerciseModal && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-end">
-                    <div className="bg-[var(--color-background)] w-full max-h-[80vh] rounded-t-3xl overflow-hidden">
-                        <div className="sticky top-0 bg-[var(--color-background)] p-4 border-b border-[rgba(255,255,255,0.05)] flex justify-between items-center">
-                            <h2 className="font-bold text-lg">Añadir Ejercicio</h2>
-                            <button onClick={() => setShowAddExerciseModal(false)}>
-                                <X size={24} />
-                            </button>
-                        </div>
-
-                        <div className="p-4 overflow-y-auto max-h-[60vh] space-y-2">
-                            {availableExercises.length > 0 ? (
-                                availableExercises.map((exercise) => (
-                                    <button
-                                        key={exercise.id}
-                                        onClick={() => {
-                                            handleAddExercise(exercise.id);
-                                        }}
-                                        className="w-full bg-[var(--color-surface)] rounded-xl p-4 flex items-center gap-4 active:scale-98 transition-transform border border-[rgba(255,255,255,0.05)]"
-                                    >
-                                        <div className="w-10 h-10 rounded-full bg-[#1f3a2f] flex items-center justify-center text-[var(--color-primary)]">
-                                            <Dumbbell size={18} />
-                                        </div>
-                                        <div className="flex-1 text-left">
-                                            <p className="font-medium text-white">{exercise.name}</p>
-                                            <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
-                                        </div>
-                                        <Plus size={20} className="text-[var(--color-primary)]" />
-                                    </button>
-                                ))
-                            ) : (
-                                <div className="text-center py-8 text-[var(--color-text-muted)]">
-                                    <p>Todos los ejercicios ya están añadidos</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Finish with Changes Modal */}
-            {showFinishModal && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-                    <div className="bg-[var(--color-background)] w-full max-w-sm rounded-2xl overflow-hidden border border-[rgba(255,255,255,0.1)]">
-                        <div className="p-6 text-center">
-                            <h2 className="font-bold text-xl mb-2">Cambios detectados</h2>
-                            <p className="text-[var(--color-text-muted)] text-sm mb-6">
-                                Has modificado los ejercicios de esta rutina. ¿Qué quieres hacer?
-                            </p>
-
-                            <div className="space-y-3">
-                                {session.routineId && (
-                                    <button
-                                        onClick={updateExistingRoutine}
-                                        className="w-full bg-[var(--color-surface)] border border-[rgba(255,255,255,0.1)] p-4 rounded-xl text-left"
-                                    >
-                                        <p className="font-bold text-white">Actualizar rutina existente</p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">Guardar los cambios en "{routine?.name}"</p>
-                                    </button>
-                                )}
-
-                                <button
-                                    onClick={createNewRoutine}
-                                    className="w-full bg-[var(--color-surface)] border border-[rgba(255,255,255,0.1)] p-4 rounded-xl text-left"
-                                >
-                                    <p className="font-bold text-white">Crear nueva rutina</p>
-                                    <p className="text-xs text-[var(--color-text-muted)]">Guardar como una rutina nueva</p>
-                                </button>
-
-                                <button
-                                    onClick={finishSession}
-                                    className="w-full bg-[var(--color-primary)] text-black font-bold p-4 rounded-xl"
-                                >
-                                    Solo finalizar
-                                </button>
-
-                                <button
-                                    onClick={() => setShowFinishModal(false)}
-                                    className="w-full text-[var(--color-text-muted)] p-2"
-                                >
-                                    Cancelar
-                                </button>
+            <AnimatePresence>
+                {showAddExerciseModal && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/80 z-50"
+                            onClick={() => setShowAddExerciseModal(false)}
+                        />
+                        <motion.div
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                            className="fixed bottom-0 left-0 right-0 bg-[var(--color-background)] max-h-[80vh] rounded-t-3xl overflow-hidden z-50"
+                        >
+                            <div className="flex justify-center pt-3 pb-1">
+                                <div className="w-10 h-1 bg-[#3a3a3c] rounded-full" />
                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                            <div className="p-4 border-b border-[rgba(255,255,255,0.05)] flex justify-between items-center">
+                                <h2 className="font-bold text-lg">Añadir Ejercicio</h2>
+                                <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddExerciseModal(false)}>
+                                    <X size={24} />
+                                </motion.button>
+                            </div>
+
+                            <div className="p-4 overflow-y-auto max-h-[60vh] space-y-2">
+                                {availableExercises.length > 0 ? (
+                                    availableExercises.map((exercise) => (
+                                        <motion.button
+                                            key={exercise.id}
+                                            whileTap={{ scale: 0.97 }}
+                                            onClick={() => handleAddExercise(exercise.id)}
+                                            className="w-full bg-[var(--color-surface)] rounded-xl p-4 flex items-center gap-4 border border-[rgba(255,255,255,0.05)]"
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-[#1f3a2f] flex items-center justify-center text-[var(--color-primary)]">
+                                                <Dumbbell size={18} />
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <p className="font-medium text-white">{exercise.name}</p>
+                                                <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
+                                            </div>
+                                            <Plus size={20} className="text-[var(--color-primary)]" />
+                                        </motion.button>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-[var(--color-text-muted)]">
+                                        <p>Todos los ejercicios ya están añadidos</p>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* Finish Modal */}
+            <AnimatePresence>
+                {showFinishModal && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/80 z-50"
+                            onClick={() => setShowFinishModal(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+                        >
+                            <div className="bg-[var(--color-background)] w-full max-w-sm rounded-2xl overflow-hidden border border-[rgba(255,255,255,0.1)] pointer-events-auto">
+                                <div className="p-6 text-center">
+                                    <h2 className="font-bold text-xl mb-2">
+                                        {hasChanges ? 'Cambios detectados' : '¿Finalizar sesión?'}
+                                    </h2>
+                                    <p className="text-[var(--color-text-muted)] text-sm mb-6">
+                                        {hasChanges
+                                            ? 'Has modificado los ejercicios de esta rutina. ¿Qué quieres hacer?'
+                                            : 'Has completado ' + completedCount + ' ejercicios. ¿Quieres guardar y finalizar?'}
+                                    </p>
+
+                                    <div className="space-y-3">
+                                        {hasChanges ? (
+                                            <>
+                                                {session.routineId && (
+                                                    <motion.button
+                                                        whileTap={{ scale: 0.97 }}
+                                                        onClick={updateExistingRoutine}
+                                                        className="w-full bg-[var(--color-surface)] border border-[rgba(255,255,255,0.1)] p-4 rounded-xl text-left"
+                                                    >
+                                                        <p className="font-bold text-white">Actualizar rutina existente</p>
+                                                        <p className="text-xs text-[var(--color-text-muted)]">Guardar los cambios en "{routine?.name}"</p>
+                                                    </motion.button>
+                                                )}
+
+                                                <motion.button
+                                                    whileTap={{ scale: 0.97 }}
+                                                    onClick={createNewRoutine}
+                                                    className="w-full bg-[var(--color-surface)] border border-[rgba(255,255,255,0.1)] p-4 rounded-xl text-left"
+                                                >
+                                                    <p className="font-bold text-white">Crear nueva rutina</p>
+                                                    <p className="text-xs text-[var(--color-text-muted)]">Guardar como una rutina nueva</p>
+                                                </motion.button>
+
+                                                <motion.button
+                                                    whileTap={{ scale: 0.95 }}
+                                                    onClick={finishSession}
+                                                    className="w-full bg-[var(--color-primary)] text-black font-bold p-4 rounded-xl"
+                                                >
+                                                    Solo finalizar
+                                                </motion.button>
+                                            </>
+                                        ) : (
+                                            <motion.button
+                                                whileTap={{ scale: 0.95 }}
+                                                onClick={finishSession}
+                                                className="w-full bg-[var(--color-primary)] text-black font-bold p-4 rounded-xl"
+                                            >
+                                                Finalizar Entrenamiento
+                                            </motion.button>
+                                        )}
+
+                                        <motion.button
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => setShowFinishModal(false)}
+                                            className="w-full text-[var(--color-text-muted)] p-2"
+                                        >
+                                            Cancelar
+                                        </motion.button>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

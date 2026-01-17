@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Minus, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface SetInputPanelProps {
     initialWeight: number;
@@ -11,9 +12,19 @@ interface SetInputPanelProps {
 export function SetInputPanel({ initialWeight, initialReps, onComplete }: SetInputPanelProps) {
     const [weight, setWeight] = useState(initialWeight);
     const [reps, setReps] = useState(initialReps);
+    const [isCompleted, setIsCompleted] = useState(false);
 
     // Chips values usually derived from context, hardcoded for MVP as per screenshot
     const chips = [60, 70, 80, 90, 100];
+
+    const handleComplete = () => {
+        setIsCompleted(true);
+        // Delay callback slightly to show animation
+        setTimeout(() => {
+            onComplete(weight, reps);
+            setIsCompleted(false); // Reset for next usage if component stays mounted
+        }, 500);
+    };
 
     return (
         <div className="bg-[var(--color-surface)] rounded-t-3xl p-6 pb-8 shadow-[0_-4px_20px_rgba(0,0,0,0.3)] border-t border-[rgba(255,255,255,0.05)] relative">
@@ -30,13 +41,41 @@ export function SetInputPanel({ initialWeight, initialReps, onComplete }: SetInp
             </div>
 
             {/* Complete Button */}
-            <button
-                onClick={() => onComplete(weight, reps)}
-                className="w-full bg-[var(--color-primary)] text-black font-bold text-lg py-4 rounded-[var(--radius-button)] flex items-center justify-center gap-2 mb-6 active:scale-95 transition-transform shadow-[0_0_20px_rgba(0,255,128,0.25)]"
+            <motion.button
+                onClick={handleComplete}
+                whileTap={{ scale: 0.9 }}
+                animate={isCompleted ? {
+                    scale: [1, 1.1, 1],
+                    backgroundColor: ["var(--color-primary)", "#ffffff", "var(--color-primary)"],
+                    transition: { duration: 0.4 }
+                } : {}}
+                className="w-full bg-[var(--color-primary)] text-black font-bold text-lg py-4 rounded-[var(--radius-button)] flex items-center justify-center gap-2 mb-6 shadow-[0_0_20px_rgba(0,255,128,0.25)] relative overflow-hidden"
             >
-                <Check strokeWidth={3} />
-                COMPLETAR SERIE
-            </button>
+                <AnimatePresence mode="wait">
+                    {!isCompleted ? (
+                        <motion.div
+                            key="text"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
+                            className="flex items-center gap-2"
+                        >
+                            <Check strokeWidth={3} />
+                            COMPLETAR SERIE
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="check"
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1.5, opacity: 1 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                            className="flex items-center gap-2"
+                        >
+                            <Check strokeWidth={4} size={32} />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </motion.button>
 
             {/* Chips */}
             <div className="flex justify-between gap-2 overflow-x-auto no-scrollbar">

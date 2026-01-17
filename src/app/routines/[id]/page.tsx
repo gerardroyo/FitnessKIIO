@@ -6,8 +6,11 @@ import { updateRoutine } from '@/lib/firestore';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { use, useState } from 'react';
-import { ArrowLeft, Plus, X, Check, Pencil, Dumbbell } from 'lucide-react';
+import { ArrowLeft, Plus, X, Check, Pencil, Dumbbell, ChevronRight } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { SwipeableRow } from '@/components/SwipeableRow';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface RoutineEditPageProps {
     params: Promise<{ id: string }>;
@@ -20,6 +23,10 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
     const [isAddingExercise, setIsAddingExercise] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState('');
+    const [deleteExerciseModal, setDeleteExerciseModal] = useState<{ isOpen: boolean; id: string | null }>({
+        isOpen: false,
+        id: null
+    });
 
     const { routines } = useRoutines();
     const { exercises: allExercises } = useExercises();
@@ -27,7 +34,6 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
     const routine = routines.find(r => String(r.id) === id);
 
     // Get exercises in this routine
-    // Ensure ids are strings for comparison
     const exerciseIds = routine?.exerciseIds.map(String) || [];
     const routineExercises = allExercises.filter(e => exerciseIds.includes(String(e.id)));
 
@@ -44,13 +50,11 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
         }
     };
 
-    const handleRemoveExercise = async (exerciseId: string | number) => {
-        if (routine && user) {
-            // Keep original types in filter if possible, or convert all to string for comparison
-            await updateRoutine(user.uid, String(routine.id), {
-                exerciseIds: routine.exerciseIds.filter(id => String(id) !== String(exerciseId))
-            });
-        }
+    const handleConfirmRemoveExercise = async () => {
+        if (!deleteExerciseModal.id || !routine || !user) return;
+        await updateRoutine(user.uid, String(routine.id), {
+            exerciseIds: routine.exerciseIds.filter(id => String(id) !== deleteExerciseModal.id)
+        });
     };
 
     const handleSaveName = async () => {
@@ -129,26 +133,27 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
 
                         {routineExercises && routineExercises.length > 0 ? (
                             <div className="space-y-2">
-                                {routineExercises.map((exercise, idx) => (
-                                    <div
-                                        key={exercise.id}
-                                        className="bg-[var(--color-surface)] rounded-xl border border-[rgba(255,255,255,0.05)] p-4 flex items-center gap-4"
-                                    >
-                                        <span className="w-6 h-6 rounded-full bg-[#1f3a2f] text-[var(--color-primary)] text-xs font-bold flex items-center justify-center">
-                                            {idx + 1}
-                                        </span>
-                                        <div className="flex-1">
-                                            <p className="font-medium text-white">{exercise.name}</p>
-                                            <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleRemoveExercise(exercise.id)}
-                                            className="p-2 text-[var(--color-text-muted)] hover:text-red-500"
+                                <AnimatePresence mode="popLayout">
+                                    {routineExercises.map((exercise, idx) => (
+                                        <motion.div
+                                            key={exercise.id}
+                                            layout
+                                            exit={{ opacity: 0, x: -100, transition: { duration: 0.2 } }}
                                         >
-                                            <X size={18} />
-                                        </button>
-                                    </div>
-                                ))}
+                                            <SwipeableRow onDelete={() => setDeleteExerciseModal({ isOpen: true, id: String(exercise.id) })}>
+                                                <div className="p-4 flex items-center gap-4">
+                                                    <span className="w-6 h-6 rounded-full bg-[#1f3a2f] text-[var(--color-primary)] text-xs font-bold flex items-center justify-center">
+                                                        {idx + 1}
+                                                    </span>
+                                                    <div className="flex-1">
+                                                        <p className="font-medium text-white">{exercise.name}</p>
+                                                        <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
+                                                    </div>
+                                                </div>
+                                            </SwipeableRow>
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
                             </div>
                         ) : (
                             <div className="text-center py-8 text-[var(--color-text-muted)] border border-dashed border-[#1f3a2f] rounded-xl">
@@ -165,46 +170,75 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
                     </div>
                 </div>
 
-                {/* Add Exercise Modal */}
-                {isAddingExercise && (
-                    <div className="fixed inset-0 bg-black/80 z-50 flex items-end">
-                        <div className="bg-[var(--color-background)] w-full max-h-[80vh] rounded-t-3xl overflow-hidden">
-                            <div className="sticky top-0 bg-[var(--color-background)] p-4 border-b border-[rgba(255,255,255,0.05)] flex justify-between items-center">
-                                <h2 className="font-bold text-lg">Añadir Ejercicio</h2>
-                                <button onClick={() => setIsAddingExercise(false)}>
-                                    <X size={24} />
-                                </button>
-                            </div>
+                {/* Delete Exercise Confirmation Modal */}
+                <ConfirmModal
+                    isOpen={deleteExerciseModal.isOpen}
+                    onClose={() => setDeleteExerciseModal({ isOpen: false, id: null })}
+                    onConfirm={handleConfirmRemoveExercise}
+                    title="¿Quitar ejercicio?"
+                    message="Este ejercicio se quitará de la rutina."
+                    confirmText="Quitar"
+                    cancelText="Cancelar"
+                    variant="warning"
+                />
 
-                            <div className="p-4 overflow-y-auto max-h-[60vh] space-y-2">
-                                {availableExercises.length > 0 ? (
-                                    availableExercises.map((exercise) => (
-                                        <button
-                                            key={exercise.id}
-                                            onClick={() => {
-                                                handleAddExercise(exercise.id);
-                                            }}
-                                            className="w-full bg-[var(--color-surface)] rounded-xl p-4 flex items-center gap-4 active:scale-98 transition-transform border border-[rgba(255,255,255,0.05)]"
-                                        >
-                                            <div className="w-10 h-10 rounded-full bg-[#1f3a2f] flex items-center justify-center text-[var(--color-primary)]">
-                                                <Dumbbell size={18} />
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <p className="font-medium text-white">{exercise.name}</p>
-                                                <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
-                                            </div>
-                                            <Plus size={20} className="text-[var(--color-primary)]" />
-                                        </button>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-8 text-[var(--color-text-muted)]">
-                                        <p>Todos los ejercicios ya están añadidos</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                {/* Add Exercise Modal */}
+                <AnimatePresence>
+                    {isAddingExercise && (
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="fixed inset-0 bg-black/80 z-50"
+                                onClick={() => setIsAddingExercise(false)}
+                            />
+                            <motion.div
+                                initial={{ y: '100%' }}
+                                animate={{ y: 0 }}
+                                exit={{ y: '100%' }}
+                                transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                                className="fixed bottom-0 left-0 right-0 bg-[var(--color-background)] max-h-[80vh] rounded-t-3xl overflow-hidden z-50"
+                            >
+                                <div className="flex justify-center pt-3 pb-1">
+                                    <div className="w-10 h-1 bg-[#3a3a3c] rounded-full" />
+                                </div>
+                                <div className="p-4 border-b border-[rgba(255,255,255,0.05)] flex justify-between items-center">
+                                    <h2 className="font-bold text-lg">Añadir Ejercicio</h2>
+                                    <motion.button whileTap={{ scale: 0.9 }} onClick={() => setIsAddingExercise(false)}>
+                                        <X size={24} />
+                                    </motion.button>
+                                </div>
+
+                                <div className="p-4 overflow-y-auto max-h-[60vh] space-y-2">
+                                    {availableExercises.length > 0 ? (
+                                        availableExercises.map((exercise) => (
+                                            <motion.button
+                                                key={exercise.id}
+                                                whileTap={{ scale: 0.97 }}
+                                                onClick={() => handleAddExercise(exercise.id)}
+                                                className="w-full bg-[var(--color-surface)] rounded-xl p-4 flex items-center gap-4 border border-[rgba(255,255,255,0.05)]"
+                                            >
+                                                <div className="w-10 h-10 rounded-full bg-[#1f3a2f] flex items-center justify-center text-[var(--color-primary)]">
+                                                    <Dumbbell size={18} />
+                                                </div>
+                                                <div className="flex-1 text-left">
+                                                    <p className="font-medium text-white">{exercise.name}</p>
+                                                    <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
+                                                </div>
+                                                <Plus size={20} className="text-[var(--color-primary)]" />
+                                            </motion.button>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-8 text-[var(--color-text-muted)]">
+                                            <p>Todos los ejercicios ya están añadidos</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
             </div>
         </ProtectedRoute>
     );

@@ -4,7 +4,7 @@ import { Exercise } from '@/lib/db';
 import { useExercises } from '@/hooks/useFirestore';
 import { getUserSessions } from '@/lib/firestore';
 import { useAuth } from '@/context/AuthContext';
-import { useLiveQuery } from 'dexie-react-hooks'; // Leaving for now if other things need it, but likely not
+
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { ArrowLeft, Share2, Trophy, TrendingUp } from 'lucide-react';

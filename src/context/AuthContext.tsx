@@ -35,7 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signInWithGoogle = async () => {
         try {
-            await setPersistence(auth, browserLocalPersistence);
             await signInWithRedirect(auth, googleProvider);
         } catch (error) {
             console.error('Error starting Google sign in:', error);

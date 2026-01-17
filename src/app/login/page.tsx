@@ -17,13 +17,16 @@ export default function LoginPage() {
 
     // State to track if redirection has started
     const [isRedirecting, setIsRedirecting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleGoogleSignIn = async () => {
         try {
+            setError(null);
             setIsRedirecting(true);
             await signInWithGoogle();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Login failed:', error);
+            setError(error.message || 'Error al iniciar sesión');
             setIsRedirecting(false);
         }
     };
@@ -63,6 +66,12 @@ export default function LoginPage() {
                     <h2 className="text-xl font-semibold text-white text-center mb-6">
                         Iniciar Sesión
                     </h2>
+
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-sm p-3 rounded-xl mb-4 text-center">
+                            {error}
+                        </div>
+                    )}
 
                     {/* Google Sign In Button */}
                     <button

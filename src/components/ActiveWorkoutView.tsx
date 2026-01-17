@@ -58,11 +58,15 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
         return `${mm}:${ss}`;
     };
 
-    const completedCount = session.entries.filter(e =>
+    // Calculate progress based ONLY on valid/visible exercises
+    const validExerciseIds = exercises.map(e => String(e.id));
+    const validEntries = session.entries.filter(e => validExerciseIds.includes(String(e.exerciseId)));
+
+    const completedCount = validEntries.filter(e =>
         e.sets.some(s => s.isCompleted)
     ).length;
 
-    const totalExercises = exerciseIds.length;
+    const totalExercises = validEntries.length;
     const progressPercent = totalExercises > 0 ? (completedCount / totalExercises) * 100 : 0;
     const dashOffset = 175.9 - (175.9 * progressPercent) / 100;
 

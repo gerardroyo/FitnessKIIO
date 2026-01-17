@@ -3,8 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
     User,
-
-    signInWithRedirect,
+    signInWithPopup, // Revert to Popup
     getRedirectResult, // Added
     setPersistence,
     browserLocalPersistence,
@@ -61,13 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signInWithGoogle = async () => {
         try {
-            setDebugInfo(prev => prev + '\nStarting Sign in...');
+            setDebugInfo(prev => prev + '\nStarting Sign in (Popup)...');
             await setPersistence(auth, browserLocalPersistence);
-            await signInWithRedirect(auth, googleProvider);
+            // Popup gives immediate feedback.
+            await signInWithPopup(auth, googleProvider); // Changed from signInWithRedirect
         } catch (error: any) {
             console.error('Error starting Google sign in:', error);
             setAuthError(error.message);
-            setDebugInfo(prev => prev + `\nSign In Err: ${error.message}`);
+            setDebugInfo(prev => prev + `\nSign In Err: ${error.message} (${error.code})`); // Updated debug info
             throw error;
         }
     };

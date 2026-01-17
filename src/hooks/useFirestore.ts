@@ -21,25 +21,19 @@ export function useExercises() {
     useEffect(() => {
         if (!user) {
             setExercises([]);
-            setLoading(false);
+            setLoading(false); // Fix: stop loading if no user
             return;
         }
-
-        // Seed if empty (check only once on mount would be better, but this works for now)
-        // We'll do seeding in the component or a separate effect to avoid race conditions here?
-        // Let's just subscribe here.
 
         const q = query(collection(firestore, `users/${user.uid}/exercises`), orderBy('name'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({
-                id: doc.id, // Firestore ID is string
+                id: doc.id,
                 ...doc.data()
             })) as unknown as Exercise[];
             setExercises(data);
             setLoading(false);
 
-            // Trigger seed if empty and not loading? 
-            // Better to do explicit seed call elsewhere.
             if (data.length === 0) {
                 seedDefaultExercises(user.uid);
             }
@@ -59,6 +53,7 @@ export function useRoutines() {
     useEffect(() => {
         if (!user) {
             setRoutines([]);
+            setLoading(false); // Fix: stop loading if no user
             return;
         }
 
@@ -86,6 +81,7 @@ export function useActiveSession() {
     useEffect(() => {
         if (!user) {
             setSession(null);
+            setLoading(false); // Fix: stop loading if no user
             return;
         }
 
@@ -104,7 +100,6 @@ export function useActiveSession() {
                 setSession({
                     id: doc.id,
                     ...data,
-                    // Convert timestamp if it's there
                     startTime: data.startTime?.toMillis?.() || data.startTime || Date.now()
                 } as unknown as WorkoutSession);
             }
@@ -122,7 +117,10 @@ export function useWeightRecords() {
     const [records, setRecords] = useState<BodyWeightRecord[]>([]);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user) {
+            setRecords([]);
+            return;
+        }
 
         const q = query(
             collection(firestore, `users/${user.uid}/weight_records`),

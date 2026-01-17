@@ -2,9 +2,10 @@
 
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { db, type WorkoutSession, type Exercise, type SetEntry } from '@/lib/db';
-import { useActiveSession } from '@/hooks/use-workout';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { WorkoutSession, Exercise, SetEntry } from '@/lib/db';
+import { useActiveSession, useExercises } from '@/hooks/useFirestore';
+import { getUserSessions, updateSession } from '@/lib/firestore';
+import { useAuth } from '@/context/AuthContext';
 import { SetInputPanel } from '@/components/SetInputPanel';
 import { ChevronLeft, MoreHorizontal, Timer, Edit2, Check, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -16,26 +17,29 @@ interface PageProps {
 
 export default function ExercisePage({ params }: PageProps) {
     const router = useRouter();
-    const session = useActiveSession();
+    const { session, loading: sessionLoading } = useActiveSession();
+    const { exercises, loading: exercisesLoading } = useExercises();
+    const { user } = useAuth();
 
     // Unwrap params using React.use()
     const { id } = use(params);
-    const exerciseId = parseInt(id);
+    const exerciseId = id; // string ID
 
-    const exercise = useLiveQuery(() => db.exercises.get(exerciseId), [exerciseId]);
+    const exercise = exercises.find(e => String(e.id) === exerciseId);
 
-    if (!session || !exercise) return null; // Loading or Invalid
+    if (sessionLoading || exercisesLoading) return null; // Loading
+    if (!session || !exercise) return null; // Invalid
 
     return (
         <MobileLayout>
-            <ExerciseDetailLogic session={session} exercise={exercise} router={router} />
+            <ExerciseDetailLogic session={session} exercise={exercise} router={router} userId={user?.uid} />
         </MobileLayout>
     );
 }
 
-function ExerciseDetailLogic({ session, exercise, router }: { session: WorkoutSession, exercise: Exercise, router: any }) {
+function ExerciseDetailLogic({ session, exercise, router, userId }: { session: WorkoutSession, exercise: Exercise, router: any, userId?: string }) {
     // State for Sets
-    const entry = session.entries.find(e => e.exerciseId === exercise.id);
+    const entry = session.entries.find(e => String(e.exerciseId) === String(exercise.id));
     const [sets, setSets] = useState<SetEntry[]>([]);
 
     // Timer State
@@ -43,32 +47,48 @@ function ExerciseDetailLogic({ session, exercise, router }: { session: WorkoutSe
     const [isResting, setIsResting] = useState(false);
 
     // Fetch Previous History
-    const previousSessionData = useLiveQuery(async () => {
-        const lastSession = await db.sessions
-            .where('state').equals('completed')
-            .reverse()
-            .filter(s => s.entries.some(e => e.exerciseId === exercise.id))
-            .first();
+    const [previousSessionData, setPreviousSessionData] = useState<{ sets: SetEntry[], bestSet: any } | null>(null);
 
-        if (!lastSession) return null;
+    useEffect(() => {
+        if (!userId) return;
 
-        const entry = lastSession.entries.find(e => e.exerciseId === exercise.id);
-        if (!entry) return null;
+        async function fetchHistory() {
+            // Fetch last 20 sessions to find history
+            const sessions = await getUserSessions(userId!, 20);
+            const completedSessions = sessions
+                .filter(s => s.state === 'completed')
+                // Sort descending by completion time (if not already sorted by query)
+                .sort((a, b) => (b.endTime || 0) - (a.endTime || 0));
 
-        // Calculate 1RM from best set
-        const bestSet = entry.sets.reduce((best, current) => {
-            const current1RM = current.weight * (1 + current.reps / 30);
-            const best1RM = best ? best.weight * (1 + best.reps / 30) : 0;
-            return current1RM > best1RM ? current : best;
-        }, null as SetEntry | null);
+            const lastSession = completedSessions.find(s =>
+                s.entries.some(e => String(e.exerciseId) === String(exercise.id))
+            );
 
-        return {
-            sets: entry.sets,
-            bestSet: bestSet
-                ? { weight: bestSet.weight, reps: bestSet.reps, oneRem: Math.round(bestSet.weight * (1 + bestSet.reps / 30)) }
-                : null
-        };
-    }, [exercise.id]);
+            if (!lastSession) {
+                setPreviousSessionData(null);
+                return;
+            }
+
+            const entry = lastSession.entries.find(e => String(e.exerciseId) === String(exercise.id));
+            if (!entry) return;
+
+            // Calculate 1RM from best set
+            const bestSet = entry.sets.reduce((best, current) => {
+                const current1RM = current.weight * (1 + current.reps / 30);
+                const best1RM = best ? best.weight * (1 + best.reps / 30) : 0;
+                return current1RM > best1RM ? current : best;
+            }, null as SetEntry | null);
+
+            setPreviousSessionData({
+                sets: entry.sets,
+                bestSet: bestSet
+                    ? { weight: bestSet.weight, reps: bestSet.reps, oneRem: Math.round(bestSet.weight * (1 + bestSet.reps / 30)) }
+                    : null
+            });
+        }
+
+        fetchHistory();
+    }, [userId, exercise.id]);
 
     // Initialize/Sync sets
     useEffect(() => {
@@ -115,7 +135,7 @@ function ExerciseDetailLogic({ session, exercise, router }: { session: WorkoutSe
         } else {
             setSets(entry.sets);
         }
-    }, [entry, exercise, previousSessionData]);
+    }, [JSON.stringify(entry), exercise, previousSessionData]); // Use stringify for deep compare of entry or just depend on entry.sets.length logic
 
     // Find active set (first uncompleted)
     const activeSetIndex = sets.findIndex(s => !s.isCompleted);
@@ -146,8 +166,8 @@ function ExerciseDetailLogic({ session, exercise, router }: { session: WorkoutSe
         setSets(newSets);
 
         // Update DB
-        const existingEntryIndex = session.entries.findIndex(e => e.exerciseId === exercise.id);
-        const newEntry = { exerciseId: exercise.id, sets: newSets };
+        const existingEntryIndex = session.entries.findIndex(e => String(e.exerciseId) === String(exercise.id));
+        const newEntry = { exerciseId: String(exercise.id), sets: newSets };
 
         let newEntries = [...session.entries];
         if (existingEntryIndex >= 0) {
@@ -156,7 +176,9 @@ function ExerciseDetailLogic({ session, exercise, router }: { session: WorkoutSe
             newEntries.push(newEntry);
         }
 
-        await db.sessions.update(session.id, { entries: newEntries });
+        if (userId) {
+            await updateSession(userId, String(session.id), { entries: newEntries });
+        }
 
         // Start Rest
         setRestTimer(0);
@@ -177,8 +199,8 @@ function ExerciseDetailLogic({ session, exercise, router }: { session: WorkoutSe
         setSets(newSets);
 
         // Update DB
-        const existingEntryIndex = session.entries.findIndex(e => e.exerciseId === exercise.id);
-        const newEntry = { exerciseId: exercise.id, sets: newSets };
+        const existingEntryIndex = session.entries.findIndex(e => String(e.exerciseId) === String(exercise.id));
+        const newEntry = { exerciseId: String(exercise.id), sets: newSets };
 
         let newEntries = [...session.entries];
         if (existingEntryIndex >= 0) {
@@ -187,7 +209,9 @@ function ExerciseDetailLogic({ session, exercise, router }: { session: WorkoutSe
             newEntries.push(newEntry);
         }
 
-        await db.sessions.update(session.id, { entries: newEntries });
+        if (userId) {
+            await updateSession(userId, String(session.id), { entries: newEntries });
+        }
     };
 
     const formatTime = (s: number) => {

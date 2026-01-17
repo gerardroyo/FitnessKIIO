@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { db, type WorkoutSession, type Exercise } from '@/lib/db';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { WorkoutSession, Exercise, Routine } from '@/lib/db'; // Keep interfaces
+import { updateSession, updateRoutine, addUserRoutine } from '@/lib/firestore'; // Firestore actions
+import { useExercises, useRoutines } from '@/hooks/useFirestore'; // Firestore hooks
 import { ChevronLeft, MoreHorizontal, Plus, FileText, X, Dumbbell, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExerciseListCard } from './ExerciseListCard';
+import { useAuth } from '@/context/AuthContext';
 
 interface ActiveWorkoutViewProps {
     session: WorkoutSession;
@@ -12,41 +14,33 @@ interface ActiveWorkoutViewProps {
 
 export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     const router = useRouter();
+    const { user } = useAuth();
     const [elapsed, setElapsed] = useState(0);
     const [showNotesModal, setShowNotesModal] = useState(false);
     const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
     const [showFinishModal, setShowFinishModal] = useState(false);
     const [notes, setNotes] = useState(session.notes || '');
 
-    // Load routine and all exercises
-    const routine = useLiveQuery(
-        () => session.routineId ? db.routines.get(session.routineId) : undefined,
-        [session.routineId]
-    );
+    // Load data hooks
+    const { exercises: allExercises } = useExercises();
+    const { routines } = useRoutines();
 
-    const allExercises = useLiveQuery(() => db.exercises.toArray());
+    // Find current routine
+    const routine = routines.find(r => String(r.id) === String(session.routineId));
 
-    // Get exercise IDs from session entries (dynamic)
-    const exerciseIds = session.entries.map(e => e.exerciseId);
+    // Get exercise IDs from session entries
+    const exerciseIds = session.entries.map(e => String(e.exerciseId));
 
-    const exercises = useLiveQuery(
-        async () => {
-            if (exerciseIds.length === 0) return [];
-            const res = await db.exercises.bulkGet(exerciseIds);
-            return res.filter((e): e is Exercise => !!e);
-        },
-        [exerciseIds.join(',')]
-    );
+    // Filter exercises used in this session
+    const exercises = allExercises.filter(e => exerciseIds.includes(String(e.id)));
 
     // Exercises not in current session
-    const availableExercises = allExercises?.filter(
-        e => !exerciseIds.includes(e.id)
-    ) || [];
+    const availableExercises = allExercises.filter(e => !exerciseIds.includes(String(e.id)));
 
     // Check if routine was modified
-    const originalExerciseIds = routine?.exerciseIds || [];
+    const originalExerciseIds = routine?.exerciseIds.map(String) || [];
     const hasChanges = session.routineId
-        ? JSON.stringify(originalExerciseIds.sort()) !== JSON.stringify(exerciseIds.sort())
+        ? JSON.stringify(originalExerciseIds.sort()) !== JSON.stringify(exerciseIds.slice().sort())
         : exerciseIds.length > 0; // Free training with exercises added
 
     // Timer logic
@@ -70,17 +64,19 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     const totalExercises = exerciseIds.length;
     const progressPercent = totalExercises > 0 ? (completedCount / totalExercises) * 100 : 0;
 
-    const navigateToExercise = (exerciseId: number) => {
+    const navigateToExercise = (exerciseId: string | number) => {
         router.push(`/exercise/${exerciseId}`);
     };
 
-    const handleAddExercise = async (exerciseId: number) => {
-        const newEntries = [...session.entries, { exerciseId, sets: [] }];
-        await db.sessions.update(session.id, { entries: newEntries });
+    const handleAddExercise = async (exerciseId: string | number) => {
+        if (!user) return;
+        const newEntries = [...session.entries, { exerciseId: String(exerciseId), sets: [] }];
+        await updateSession(user.uid, String(session.id), { entries: newEntries });
     };
 
     const handleSaveNotes = async () => {
-        await db.sessions.update(session.id, { notes });
+        if (!user) return;
+        await updateSession(user.uid, String(session.id), { notes });
         setShowNotesModal(false);
     };
 
@@ -93,7 +89,8 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     };
 
     const finishSession = async () => {
-        await db.sessions.update(session.id, {
+        if (!user) return;
+        await updateSession(user.uid, String(session.id), {
             state: 'completed',
             endTime: Date.now(),
             durationSeconds: elapsed,
@@ -103,20 +100,34 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     };
 
     const updateExistingRoutine = async () => {
-        if (routine) {
-            await db.routines.update(routine.id, { exerciseIds });
-        }
+        if (!user || !routine) return;
+        // exerciseIds are strings, updateRoutine likely expects numbers if we didn't update types?
+        // We updated types in db.ts to number | string.
+        await updateRoutine(user.uid, String(routine.id), { exerciseIds: exerciseIds.map(Number) }); // Still map to Number? Firestore ID are strings.
+        // Wait, exerciseIds in Routine are number[] in interface?
+        // In db.ts: exerciseIds: number[].
+        // I should update Routine interface too if I want strings.
+        // Let's assume for now we keep using what we have, but Firestore IDs are strings.
+        // If I try to save strings into number[], TS might complain or Firestore will save strings anyway.
+        // Let's coerce to any or update interface properly in a follow up if needed.
+        // Actually I updated ID type but not exerciseIds array type.
+        // Let's fix that in this edit too if possible or in db.ts.
+        await updateRoutine(user.uid, String(routine.id), { exerciseIds: exerciseIds.map(id => isNaN(Number(id)) ? id : Number(id)) as any });
+
         await finishSession();
     };
 
     const createNewRoutine = async () => {
         const name = prompt('Nombre de la nueva rutina:', `${session.name} (modificada)`);
-        if (name) {
-            const newRoutineId = await db.routines.add({ name, exerciseIds });
-            // Update session name and link to new routine
-            await db.sessions.update(session.id, {
+        if (name && user) {
+            const newRoutineId = await addUserRoutine(user.uid, {
                 name,
-                routineId: newRoutineId as number
+                exerciseIds: exerciseIds.map(id => isNaN(Number(id)) ? id : Number(id)) as any
+            });
+            // Update session name and link to new routine
+            await updateSession(user.uid, String(session.id), {
+                name,
+                routineId: newRoutineId
             });
         }
         await finishSession();

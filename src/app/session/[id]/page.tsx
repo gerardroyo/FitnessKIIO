@@ -1,11 +1,13 @@
 'use client';
 
-import { db, WorkoutSession, Exercise } from '@/lib/db';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { WorkoutSession, Exercise } from '@/lib/db';
+import { useExercises } from '@/hooks/useFirestore';
+import { getSession } from '@/lib/firestore';
+import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { use } from 'react';
+import { use, useState, useEffect } from 'react';
 import { ArrowLeft, Clock, Dumbbell, ChevronDown, ChevronUp, FileText } from 'lucide-react';
-import { useState } from 'react';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 interface SessionPageProps {
     params: Promise<{ id: string }>;
@@ -14,22 +16,24 @@ interface SessionPageProps {
 export default function SessionPage({ params }: SessionPageProps) {
     const { id } = use(params);
     const router = useRouter();
+    const { user } = useAuth();
     const [expandedExercise, setExpandedExercise] = useState<number | null>(null);
+    const [session, setSession] = useState<WorkoutSession | null>(null);
 
-    const session = useLiveQuery(() => db.sessions.get(Number(id)), [id]);
+    const { exercises } = useExercises();
 
-    // Get all exercises used in this session
-    const exerciseIds = session?.entries.map(e => e.exerciseId) || [];
-    const exercises = useLiveQuery(
-        async () => {
-            if (exerciseIds.length === 0) return [];
-            const result = await db.exercises.bulkGet(exerciseIds);
-            return result.filter((e): e is Exercise => !!e);
-        },
-        [exerciseIds.join(',')]
-    );
+    useEffect(() => {
+        if (!user || !id) return;
+        async function fetchSession() {
+            const s = await getSession(user!.uid, id);
+            setSession(s);
+        }
+        fetchSession();
+    }, [user, id]);
 
-    const exerciseMap = new Map(exercises?.map(e => [e.id, e]) || []);
+    // Get all exercises used in this session using the hook data
+    // Create a map for easy lookup
+    const exerciseMap = new Map(exercises.map(e => [String(e.id), e]));
 
     if (!session) {
         return (
@@ -111,7 +115,7 @@ export default function SessionPage({ params }: SessionPageProps) {
                     <h2 className="text-lg font-bold mb-3">Ejercicios</h2>
                     <div className="space-y-3">
                         {session.entries.map((entry, idx) => {
-                            const exercise = exerciseMap.get(entry.exerciseId);
+                            const exercise = exerciseMap.get(String(entry.exerciseId));
                             const isExpanded = expandedExercise === idx;
                             const completedSets = entry.sets.filter(s => s.isCompleted);
 

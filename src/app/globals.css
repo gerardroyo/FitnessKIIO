@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  /* Gym Tracker Theme */
+  --color-background: #050b08; /* Ultra dark green/black */
+  --color-surface: #122a1f;    /* Card background */
+  --color-surface-hover: #1a3a2b;
+  --color-primary: #00ff80;    /* Bright Emerald */
+  --color-primary-dark: #00cc66;
+  --color-secondary: #2d4a3e;
+  --color-muted: #6b8c7e;
+  --color-text-main: #ffffff;
+  --color-text-muted: #a0b3a8;
+  
+  --radius-card: 1rem;
+  --radius-button: 9999px;
+}
+
+/* Custom Base Styles */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-main);
+  font-family: var(--font-gest-sans), system-ui, sans-serif;
+  overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Utilities */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+.card-shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Scrollbar hiding for horizontal lists */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none; 
+  scrollbar-width: none; 
+}

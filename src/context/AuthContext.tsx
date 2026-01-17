@@ -16,7 +16,8 @@ import { auth, googleProvider } from '@/lib/firebase';
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    authError: string | null; // Added
+    authError: string | null;
+    debugInfo: string; // Added for debugging
     signInWithGoogle: () => Promise<void>;
     signOut: () => Promise<void>;
 }
@@ -26,24 +27,33 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
-    const [authError, setAuthError] = useState<string | null>(null); // Added
+    const [authError, setAuthError] = useState<string | null>(null);
+    const [debugInfo, setDebugInfo] = useState<string>('Init...');
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
+            console.log('Auth Changed:', user?.email);
+            setDebugInfo(prev => prev + `\nAuth: ${user ? user.email : 'null'}`);
             setUser(user);
             setLoading(false);
         });
 
         // Check for redirect result
+        setDebugInfo(prev => prev + '\nChecking Redirect...');
         getRedirectResult(auth)
             .then((result) => {
                 if (result) {
-                    console.log('Redirect Sign-in Successful:', result.user.email);
+                    console.log('Redirect Success:', result.user.email);
+                    setDebugInfo(prev => prev + `\nRedirect OK: ${result.user.email}`);
+                } else {
+                    console.log('Redirect: No result');
+                    setDebugInfo(prev => prev + '\nRedirect: null');
                 }
             })
             .catch((error) => {
-                console.error('Redirect Sign-in Error:', error);
+                console.error('Redirect Error:', error);
                 setAuthError(error.message);
+                setDebugInfo(prev => prev + `\nRedirect Err: ${error.code}`);
             });
 
         return () => unsubscribe();
@@ -51,9 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signInWithGoogle = async () => {
         try {
+            setDebugInfo(prev => prev + '\nStarting Sign in...');
+            await setPersistence(auth, browserLocalPersistence);
             await signInWithRedirect(auth, googleProvider);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error starting Google sign in:', error);
+            setAuthError(error.message);
+            setDebugInfo(prev => prev + `\nSign In Err: ${error.message}`);
             throw error;
         }
     };
@@ -68,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, authError, signInWithGoogle, signOut }}>
+        <AuthContext.Provider value={{ user, loading, authError, debugInfo, signInWithGoogle, signOut }}>
             {children}
         </AuthContext.Provider>
     );

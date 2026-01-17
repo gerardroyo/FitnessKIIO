@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Dumbbell } from 'lucide-react';
 
 export default function LoginPage() {
-    const { user, loading, signInWithGoogle, authError } = useAuth();
+    const { user, loading, signInWithGoogle, authError, debugInfo } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
@@ -123,6 +123,12 @@ export default function LoginPage() {
                 <p className="text-xs text-[var(--color-text-muted)] mt-8 text-center">
                     Al continuar, aceptas nuestros términos y condiciones
                 </p>
+
+                {/* Debug Info */}
+                <div className="mt-8 p-4 bg-black/50 rounded-lg text-[10px] font-mono text-gray-400 whitespace-pre-wrap w-full">
+                    DEBUG LOG:
+                    {debugInfo}
+                </div>
             </div>
         </div>
     );

@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
     User,
-    signInWithPopup,
+    signInWithRedirect, // Changed from signInWithPopup
     setPersistence,
     browserLocalPersistence,
     signOut as firebaseSignOut,
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const signInWithGoogle = async () => {
         try {
             await setPersistence(auth, browserLocalPersistence);
-            await signInWithPopup(auth, googleProvider);
+            await signInWithRedirect(auth, googleProvider);
         } catch (error) {
             console.error('Error starting Google sign in:', error);
             throw error;

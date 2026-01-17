@@ -78,13 +78,18 @@ export function DashboardView({ onStart }: DashboardViewProps) {
         const grouped = filtered.reduce((acc, s) => {
             const dateStr = new Date(s.startTime).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
             if (!acc[dateStr]) {
-                acc[dateStr] = { date: dateStr, duration: 0, rawDate: s.startTime };
+                acc[dateStr] = { date: dateStr, durationSeconds: 0, rawDate: s.startTime };
             }
-            acc[dateStr].duration += Math.round((s.durationSeconds || 0) / 60);
+            acc[dateStr].durationSeconds += (s.durationSeconds || 0);
             return acc;
         }, {} as Record<string, any>);
 
-        const data = Object.values(grouped).sort((a: any, b: any) => a.rawDate - b.rawDate);
+        const data = Object.values(grouped)
+            .sort((a: any, b: any) => a.rawDate - b.rawDate)
+            .map((item: any) => ({
+                ...item,
+                duration: Math.round(item.durationSeconds / 60)
+            }));
 
         return { filteredHistory: filtered, chartData: data };
     })();
@@ -320,7 +325,7 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                                                     <div>
                                                         <p className="font-bold text-white">{session.name}</p>
                                                         <p className="text-xs text-[var(--color-text-muted)]">
-                                                            {new Date(session.startTime).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} • {Math.floor((session.durationSeconds || 0) / 60)} min
+                                                            {new Date(session.startTime).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} • {Math.round((session.durationSeconds || 0) / 60)} min
                                                         </p>
                                                     </div>
                                                 </div>

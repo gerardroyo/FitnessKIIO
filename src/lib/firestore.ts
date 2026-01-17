@@ -44,6 +44,11 @@ export const updateExercise = async (userId: string, exerciseId: string, updates
     await updateDoc(docRef, updates as any);
 };
 
+export const deleteExercise = async (userId: string, exerciseId: string) => {
+    const docRef = doc(firestore, `users/${userId}/exercises`, exerciseId);
+    await deleteDoc(docRef);
+};
+
 // --- Routines ---
 // Storing routines with exerciseIds (strings in Firestore, but we need to map them)
 export const getUserRoutines = async (userId: string): Promise<Routine[]> => {

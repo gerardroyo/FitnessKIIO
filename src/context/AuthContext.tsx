@@ -11,6 +11,7 @@ import {
     onAuthStateChanged
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
+import LoadingScreen from '@/components/LoadingScreen';
 
 interface AuthContextType {
     user: User | null;
@@ -55,6 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw error;
         }
     };
+
+    if (loading) {
+        return <LoadingScreen />;
+    }
 
     return (
         <AuthContext.Provider value={{ user, loading, authError, signInWithGoogle, signOut }}>

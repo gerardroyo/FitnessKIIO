@@ -1,8 +1,7 @@
-'use client';
-
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
+import { Providers } from "@/components/Providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,6 +13,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const metadata: Metadata = {
+  title: "FitnessKIIO",
+  description: "Tu compañero de entrenamiento personal",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-192.png", // Uses PWA icon as favicon
+    shortcut: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#059669", // Emerald-600 to match brand
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -21,16 +35,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <head>
-        <title>FitnessKIIO</title>
-        <meta name="description" content="Tu compañero de entrenamiento personal" />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
+        <Providers>
           {children}
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

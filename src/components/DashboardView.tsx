@@ -1,9 +1,9 @@
-import { db } from '@/lib/db';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { deleteSession, getUserSessions } from '@/lib/firestore'; // Import firestore functions
+import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { Calendar, Plus, Trophy, Activity, History, Trash2, Dumbbell, Notebook, User, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface DashboardViewProps {
@@ -12,28 +12,37 @@ interface DashboardViewProps {
 
 export function DashboardView({ onStart }: DashboardViewProps) {
     const router = useRouter();
+    const { user } = useAuth();
     const [timeRange, setTimeRange] = useState<'1S' | '1M' | '3M' | '1A' | 'ALL'>('ALL');
+    const [history, setHistory] = useState<any[]>([]);
 
-    const history = useLiveQuery(async () => {
-        const sessions = await db.sessions
-            .where('state')
-            .equals('completed')
-            .reverse()
-            .toArray();
+    useEffect(() => {
+        if (!user) return;
+        async function fetchHistory() {
+            // Fetch last 100 sessions for dashboard stats (should be enough for immediate view)
+            // Or maybe 365? Let's do 100 for now.
+            const sessions = await getUserSessions(user!.uid, 100);
+            const completed = sessions.filter(s => s.state === 'completed');
 
-        // Enrich with volume calculation
-        return sessions.map(session => {
-            const volume = session.entries.reduce((acc, entry) => {
-                return acc + entry.sets.reduce((sAcc, set) => sAcc + (set.isCompleted ? set.weight * set.reps : 0), 0);
-            }, 0);
-            return { ...session, volume };
-        });
-    });
+            // Enrich with volume calculation
+            const enriched = completed.map(session => {
+                const volume = session.entries.reduce((acc, entry) => {
+                    return acc + entry.sets.reduce((sAcc, set) => sAcc + (set.isCompleted ? set.weight * set.reps : 0), 0);
+                }, 0);
+                return { ...session, volume };
+            });
+            setHistory(enriched);
+        }
+        fetchHistory();
+    }, [user]);
 
-    const handleDelete = async (e: React.MouseEvent, sessionId: number) => {
+    const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
         e.stopPropagation();
+        if (!user) return;
         if (window.confirm('¿Borrar esta sesión permanentemente?')) {
-            await db.sessions.delete(sessionId);
+            await deleteSession(user.uid, sessionId);
+            // Optimistic update
+            setHistory(prev => prev.filter(s => s.id !== sessionId));
         }
     };
 

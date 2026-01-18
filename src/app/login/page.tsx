@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Dumbbell } from 'lucide-react';
 
 export default function LoginPage() {
-    const { user, loading, signInWithGoogle, signInWithGooglePopup, authError, debugLogs } = useAuth();
+    const { user, loading, signInWithGoogle, signInWithGoogleRedirect, authError, debugLogs } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
@@ -110,45 +110,27 @@ export default function LoginPage() {
                         )}
                     </button>
 
-                    {/* Fallback for issues */}
+                    {/* Fallback for Redirect testing */}
                     <button
                         onClick={async () => {
                             try {
                                 setError(null);
                                 setIsRedirecting(true);
-                                await signInWithGooglePopup();
+                                await signInWithGoogleRedirect();
                             } catch (error: any) {
-                                console.error('Popup Login failed:', error);
-                                setError(error.message || 'Error al iniciar sesión con Popup');
+                                console.error('Redirect Login failed:', error);
+                                setError(error.message || 'Error en redirección');
                                 setIsRedirecting(false);
                             }
                         }}
                         disabled={isRedirecting}
                         className="mt-4 text-xs text-gray-400 underline hover:text-white transition-colors w-full text-center"
                     >
-                        ¿Problemas? Prueba el modo alternativo (Popup)
+                        Probar modo "Sin Popup" (Experimental)
                     </button>
                 </div>
 
-                {/* Debug Logs Section */}
-                <div className="mt-8 w-full max-w-sm">
-                    <details className="bg-black/40 rounded-lg border border-white/10">
-                        <summary className="p-3 text-xs text-gray-400 cursor-pointer hover:text-white select-none">
-                            Ver registros de depuración
-                        </summary>
-                        <div className="p-3 max-h-40 overflow-y-auto text-[10px] font-mono text-gray-500 whitespace-pre-wrap flex flex-col gap-1">
-                            {!window.isSecureContext && (
-                                <div className="text-red-400 font-bold mb-2">
-                                    ⚠️ INSECURE CONTEXT detected. Mobile redirects may fail on HTTP.
-                                </div>
-                            )}
-                            {debugLogs.map((log, i) => (
-                                <div key={i} className="border-b border-white/5 pb-1 last:border-0">{log}</div>
-                            ))}
-                            {debugLogs.length === 0 && <div>No logs yet...</div>}
-                        </div>
-                    </details>
-                </div>
+
 
                 {/* Footer */}
                 <p className="text-xs text-[var(--color-text-muted)] mt-8 text-center">

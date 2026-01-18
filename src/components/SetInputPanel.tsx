@@ -34,7 +34,7 @@ export function SetInputPanel({ initialWeight, initialReps, onComplete }: SetInp
                     label="PESO (KG)"
                     value={weight}
                     onChange={setWeight}
-                    step={2.5}
+                    step={0.5}
                     isFloat
                 />
                 <ControlGroup label="REPS" value={reps} onChange={setReps} step={1} />
@@ -99,19 +99,37 @@ export function SetInputPanel({ initialWeight, initialReps, onComplete }: SetInp
 }
 
 function ControlGroup({ label, value, onChange, step, isFloat }: any) {
-    const inc = () => onChange((v: number) => isFloat ? +(v + step).toFixed(1) : v + step);
-    const dec = () => onChange((v: number) => isFloat ? +(v - step).toFixed(1) : Math.max(0, v - step));
+    const inc = () => onChange((v: number) => isFloat ? +(v + step).toFixed(2) : v + step);
+    const dec = () => onChange((v: number) => isFloat ? +(Math.max(0, v - step)).toFixed(2) : Math.max(0, v - step));
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (val === '') {
+            onChange(0);
+            return;
+        }
+        const num = parseFloat(val);
+        if (!isNaN(num)) {
+            onChange(num);
+        }
+    };
 
     return (
         <div className="bg-[#1f3a2f] rounded-xl p-1 flex items-center justify-between relative">
-            <button onClick={dec} className="w-12 h-12 flex items-center justify-center text-white text-2xl active:opacity-70">
+            <button onClick={dec} className="w-12 h-12 flex items-center justify-center text-white text-2xl active:opacity-70 hover:bg-white/5 rounded-lg transition-colors">
                 <Minus size={20} />
             </button>
-            <div className="text-center pt-2">
+            <div className="text-center pt-2 flex flex-col items-center">
                 <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider mb-0.5">{label}</p>
-                <p className="text-2xl font-bold bg-transparent text-white w-20">{value}</p>
+                <input
+                    type="number"
+                    value={value || ''}
+                    onChange={handleInputChange}
+                    className="text-2xl font-bold bg-transparent text-white w-20 text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    step={step}
+                />
             </div>
-            <button onClick={inc} className="w-12 h-12 flex items-center justify-center text-white text-2xl active:opacity-70">
+            <button onClick={inc} className="w-12 h-12 flex items-center justify-center text-white text-2xl active:opacity-70 hover:bg-white/5 rounded-lg transition-colors">
                 <Plus size={20} />
             </button>
         </div>

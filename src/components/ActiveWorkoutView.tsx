@@ -21,6 +21,8 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
     const [showFinishModal, setShowFinishModal] = useState(false);
     const [notes, setNotes] = useState(session.notes || '');
+    const [showNameModal, setShowNameModal] = useState(false);
+    const [newRoutineName, setNewRoutineName] = useState('');
 
     // Load data hooks
     const { exercises: allExercises } = useExercises();
@@ -107,19 +109,25 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
         await finishSession();
     };
 
-    const createNewRoutine = async () => {
-        const name = prompt('Nombre de la nueva rutina:', `${session.name} (modificada)`);
-        if (name && user) {
+    const confirmCreateRoutine = async () => {
+        if (newRoutineName && user) {
             const newRoutineId = await addUserRoutine(user.uid, {
-                name,
+                name: newRoutineName,
                 exerciseIds: exerciseIds.map(id => isNaN(Number(id)) ? id : Number(id)) as any
             });
             await updateSession(user.uid, String(session.id), {
-                name,
+                name: newRoutineName,
                 routineId: newRoutineId
             });
         }
+        setShowNameModal(false);
         await finishSession();
+    };
+
+    const openCreateRoutineModal = () => {
+        setNewRoutineName(`${session.name} (modificada)`);
+        setShowFinishModal(false);
+        setShowNameModal(true);
     };
 
     if (!exercises) return <div className="p-6">Cargando...</div>;
@@ -406,7 +414,7 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
 
                                                 <motion.button
                                                     whileTap={{ scale: 0.97 }}
-                                                    onClick={createNewRoutine}
+                                                    onClick={openCreateRoutineModal}
                                                     className="w-full bg-[var(--color-surface)] border border-[rgba(255,255,255,0.1)] p-4 rounded-xl text-left"
                                                 >
                                                     <p className="font-bold text-white">Crear nueva rutina</p>
@@ -434,6 +442,62 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
                                         <motion.button
                                             whileTap={{ scale: 0.95 }}
                                             onClick={() => setShowFinishModal(false)}
+                                            className="w-full text-[var(--color-text-muted)] p-2"
+                                        >
+                                            Cancelar
+                                        </motion.button>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+            {/* Name Modal */}
+            <AnimatePresence>
+                {showNameModal && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/80 z-50"
+                            onClick={() => setShowNameModal(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+                        >
+                            <div className="bg-[var(--color-background)] w-full max-w-sm rounded-2xl overflow-hidden border border-[rgba(255,255,255,0.1)] pointer-events-auto">
+                                <div className="p-6">
+                                    <h2 className="font-bold text-xl mb-4 text-center">
+                                        Nombre de la rutina
+                                    </h2>
+
+                                    <input
+                                        type="text"
+                                        value={newRoutineName}
+                                        onChange={(e) => setNewRoutineName(e.target.value)}
+                                        className="w-full bg-[var(--color-surface)] border border-[rgba(255,255,255,0.1)] rounded-xl p-4 text-white mb-6 focus:outline-none focus:border-[var(--color-primary)]"
+                                        placeholder="Ej: Pierna Hipertrofia"
+                                        autoFocus
+                                    />
+
+                                    <div className="space-y-3">
+                                        <motion.button
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={confirmCreateRoutine}
+                                            disabled={!newRoutineName.trim()}
+                                            className="w-full bg-[var(--color-primary)] text-black font-bold p-4 rounded-xl disabled:opacity-50"
+                                        >
+                                            Guardar y Finalizar
+                                        </motion.button>
+                                        <motion.button
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => setShowNameModal(false)}
                                             className="w-full text-[var(--color-text-muted)] p-2"
                                         >
                                             Cancelar

@@ -351,7 +351,7 @@ export function DashboardView({ onStart }: DashboardViewProps) {
                     className="w-full bg-[var(--color-primary)] text-black font-bold py-4 rounded-[var(--radius-button)] flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(0,255,128,0.3)]"
                 >
                     <Plus strokeWidth={3} />
-                    Nueva Sesión
+                    Empezar Entreno
                 </motion.button>
             </div>
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import {
     User,
-    signInWithPopup, // Revert to Popup
-    getRedirectResult, // Added
+    signInWithRedirect,
+    signInWithPopup,
+    getRedirectResult,
     setPersistence,
     browserLocalPersistence,
     signOut as firebaseSignOut,
@@ -28,19 +29,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [authError, setAuthError] = useState<string | null>(null);
 
+    const redirectCheckRef = useRef(false);
+
     useEffect(() => {
+        console.log("AuthProvider mounted. URL:", window.location.href);
+
+        let redirectCheckDone = false;
+        let authStateKnown = false;
+
+        const checkDone = () => {
+            if (redirectCheckDone && authStateKnown) {
+                setLoading(false);
+            }
+        };
+
         const unsubscribe = onAuthStateChanged(auth, (user) => {
+            console.log("Auth state changed:", user ? `User ${user.uid}` : "No user");
             setUser(user);
-            setLoading(false);
+            authStateKnown = true;
+            // If we have a user, we are definitely done loading
+            if (user) {
+                setLoading(false);
+            } else {
+                checkDone();
+            }
         });
+
+        // Check for redirect errors only once
+        if (!redirectCheckRef.current) {
+            redirectCheckRef.current = true;
+            getRedirectResult(auth)
+                .then((result) => {
+                    console.log("Redirect result:", result ? `Success ${result.user.uid}` : "No result");
+                })
+                .catch((error) => {
+                    console.error('Error in redirect result:', error);
+                    setAuthError(error.message);
+                })
+                .finally(() => {
+                    redirectCheckDone = true;
+                    checkDone();
+                });
+        } else {
+            redirectCheckDone = true;
+            checkDone();
+        }
 
         return () => unsubscribe();
     }, []);
 
     const signInWithGoogle = async () => {
         try {
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+            // Set persistence to local (default, but explicit ensures consistency)
             await setPersistence(auth, browserLocalPersistence);
-            await signInWithPopup(auth, googleProvider);
+
+            if (isMobile) {
+                // Mobile: Redirect to avoid popup blockers and PWA context issues
+                await signInWithRedirect(auth, googleProvider);
+            } else {
+                // Desktop: Popup is preferred for UX and dev reliability
+                await signInWithPopup(auth, googleProvider);
+            }
         } catch (error: any) {
             console.error('Error starting Google sign in:', error);
             setAuthError(error.message);

@@ -1,10 +1,11 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import {
     User,
-    signInWithPopup, // Revert to Popup
-    getRedirectResult, // Added
+    signInWithRedirect,
+    signInWithPopup,
+    getRedirectResult,
     setPersistence,
     browserLocalPersistence,
     signOut as firebaseSignOut,
@@ -17,7 +18,10 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     authError: string | null;
+    debugLogs: string[];
     signInWithGoogle: () => Promise<void>;
+    signInWithGoogleRedirect: () => Promise<void>;
+    signInWithGooglePopup: () => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -27,22 +31,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [authError, setAuthError] = useState<string | null>(null);
+    const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+    const addLog = (msg: string) => {
+        const time = new Date().toLocaleTimeString();
+        setDebugLogs(prev => [`[${time}] ${msg}`, ...prev]);
+        console.log(`[AuthDebug] ${msg}`);
+    };
+
+    const redirectCheckRef = useRef(false);
 
     useEffect(() => {
+        const isSecure = window.isSecureContext;
+        addLog(`AuthProvider mounted. Secure: ${isSecure}. URL: ${window.location.href}`);
+
+        let redirectCheckDone = false;
+        let authStateKnown = false;
+
+        const checkDone = () => {
+            if (redirectCheckDone && authStateKnown) {
+                setLoading(false);
+            }
+        };
+
         const unsubscribe = onAuthStateChanged(auth, (user) => {
+            addLog(`Auth state changed: ${user ? `User ${user.uid}` : "No user"}`);
             setUser(user);
-            setLoading(false);
+            authStateKnown = true;
+            // If we have a user, we are definitely done loading
+            if (user) {
+                setLoading(false);
+            } else {
+                checkDone();
+            }
         });
+
+        // Check for redirect errors only once
+        if (!redirectCheckRef.current) {
+            redirectCheckRef.current = true;
+            addLog("Checking getRedirectResult...");
+            getRedirectResult(auth)
+                .then((result) => {
+                    addLog(`Redirect result: ${result ? `Success ${result.user.uid}` : "No result"}`);
+                })
+                .catch((error) => {
+                    addLog(`Error in redirect result: ${error.message}`);
+                    setAuthError(error.message);
+                })
+                .finally(() => {
+                    redirectCheckDone = true;
+                    checkDone();
+                });
+        } else {
+            redirectCheckDone = true;
+            checkDone();
+        }
 
         return () => unsubscribe();
     }, []);
 
     const signInWithGoogle = async () => {
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        addLog(`Sign in requested. Mobile: ${isMobile}`);
+        if (isMobile) {
+            await signInWithGoogleRedirect();
+        } else {
+            await signInWithGooglePopup();
+        }
+    };
+
+    const signInWithGoogleRedirect = async () => {
         try {
+            addLog("Starting Google Redirect...");
+            await setPersistence(auth, browserLocalPersistence);
+            await signInWithRedirect(auth, googleProvider);
+        } catch (error: any) {
+            addLog(`Error starting Google redirect: ${error.message}`);
+            setAuthError(error.message);
+            throw error;
+        }
+    };
+
+    const signInWithGooglePopup = async () => {
+        try {
+            addLog("Starting Google Popup...");
             await setPersistence(auth, browserLocalPersistence);
             await signInWithPopup(auth, googleProvider);
         } catch (error: any) {
-            console.error('Error starting Google sign in:', error);
+            addLog(`Error starting Google popup: ${error.message}`);
             setAuthError(error.message);
             throw error;
         }
@@ -62,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return (
-        <AuthContext.Provider value={{ user, loading, authError, signInWithGoogle, signOut }}>
+        <AuthContext.Provider value={{ user, loading, authError, debugLogs, signInWithGoogle, signInWithGoogleRedirect, signInWithGooglePopup, signOut }}>
             {children}
         </AuthContext.Provider>
     );

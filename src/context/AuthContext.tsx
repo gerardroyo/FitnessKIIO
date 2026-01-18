@@ -18,7 +18,10 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     authError: string | null;
+    debugLogs: string[];
     signInWithGoogle: () => Promise<void>;
+    signInWithGoogleRedirect: () => Promise<void>;
+    signInWithGooglePopup: () => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -28,11 +31,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [authError, setAuthError] = useState<string | null>(null);
+    const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+    const addLog = (msg: string) => {
+        const time = new Date().toLocaleTimeString();
+        setDebugLogs(prev => [`[${time}] ${msg}`, ...prev]);
+        console.log(`[AuthDebug] ${msg}`);
+    };
 
     const redirectCheckRef = useRef(false);
 
     useEffect(() => {
-        console.log("AuthProvider mounted. URL:", window.location.href);
+        const isSecure = window.isSecureContext;
+        addLog(`AuthProvider mounted. Secure: ${isSecure}. URL: ${window.location.href}`);
 
         let redirectCheckDone = false;
         let authStateKnown = false;
@@ -44,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-            console.log("Auth state changed:", user ? `User ${user.uid}` : "No user");
+            addLog(`Auth state changed: ${user ? `User ${user.uid}` : "No user"}`);
             setUser(user);
             authStateKnown = true;
             // If we have a user, we are definitely done loading
@@ -58,12 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Check for redirect errors only once
         if (!redirectCheckRef.current) {
             redirectCheckRef.current = true;
+            addLog("Checking getRedirectResult...");
             getRedirectResult(auth)
                 .then((result) => {
-                    console.log("Redirect result:", result ? `Success ${result.user.uid}` : "No result");
+                    addLog(`Redirect result: ${result ? `Success ${result.user.uid}` : "No result"}`);
                 })
                 .catch((error) => {
-                    console.error('Error in redirect result:', error);
+                    addLog(`Error in redirect result: ${error.message}`);
                     setAuthError(error.message);
                 })
                 .finally(() => {
@@ -79,21 +91,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const signInWithGoogle = async () => {
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        addLog(`Sign in requested. Mobile: ${isMobile}`);
+        if (isMobile) {
+            await signInWithGoogleRedirect();
+        } else {
+            await signInWithGooglePopup();
+        }
+    };
+
+    const signInWithGoogleRedirect = async () => {
         try {
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-            // Set persistence to local (default, but explicit ensures consistency)
+            addLog("Starting Google Redirect...");
             await setPersistence(auth, browserLocalPersistence);
-
-            if (isMobile) {
-                // Mobile: Redirect to avoid popup blockers and PWA context issues
-                await signInWithRedirect(auth, googleProvider);
-            } else {
-                // Desktop: Popup is preferred for UX and dev reliability
-                await signInWithPopup(auth, googleProvider);
-            }
+            await signInWithRedirect(auth, googleProvider);
         } catch (error: any) {
-            console.error('Error starting Google sign in:', error);
+            addLog(`Error starting Google redirect: ${error.message}`);
+            setAuthError(error.message);
+            throw error;
+        }
+    };
+
+    const signInWithGooglePopup = async () => {
+        try {
+            addLog("Starting Google Popup...");
+            await setPersistence(auth, browserLocalPersistence);
+            await signInWithPopup(auth, googleProvider);
+        } catch (error: any) {
+            addLog(`Error starting Google popup: ${error.message}`);
             setAuthError(error.message);
             throw error;
         }
@@ -113,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return (
-        <AuthContext.Provider value={{ user, loading, authError, signInWithGoogle, signOut }}>
+        <AuthContext.Provider value={{ user, loading, authError, debugLogs, signInWithGoogle, signInWithGoogleRedirect, signInWithGooglePopup, signOut }}>
             {children}
         </AuthContext.Provider>
     );

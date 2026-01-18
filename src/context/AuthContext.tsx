@@ -34,93 +34,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
     const addLog = (msg: string) => {
-        const time = new Date().toLocaleTimeString();
-        setDebugLogs(prev => [`[${time}] ${msg}`, ...prev]);
-        console.log(`[AuthDebug] ${msg}`);
+        console.log(`[Auth] ${msg}`);
+        setDebugLogs(prev => [`${new Date().toLocaleTimeString()} ${msg}`, ...prev]);
     };
 
-    const redirectCheckRef = useRef(false);
-
     useEffect(() => {
-        const isSecure = window.isSecureContext;
-        addLog(`AuthProvider mounted. Secure: ${isSecure}. URL: ${window.location.href}`);
+        addLog("Init AuthProvider");
 
-        let redirectCheckDone = false;
-        let authStateKnown = false;
-
-        const checkDone = () => {
-            if (redirectCheckDone && authStateKnown) {
-                setLoading(false);
-            }
-        };
-
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            addLog(`Auth state changed: ${user ? `User ${user.uid}` : "No user"}`);
-            setUser(user);
-            authStateKnown = true;
-            // If we have a user, we are definitely done loading
-            if (user) {
-                setLoading(false);
-            } else {
-                checkDone();
-            }
+        // Listen for auth state changes
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            addLog(`Auth Changed: ${currentUser ? currentUser.uid : 'null'}`);
+            setUser(currentUser);
+            setLoading(false);
         });
 
-        // Check for redirect errors only once
-        if (!redirectCheckRef.current) {
-            redirectCheckRef.current = true;
-            addLog("Checking getRedirectResult...");
-            getRedirectResult(auth)
-                .then((result) => {
-                    addLog(`Redirect result: ${result ? `Success ${result.user.uid}` : "No result"}`);
-                })
-                .catch((error) => {
-                    addLog(`Error in redirect result: ${error.message}`);
-                    setAuthError(error.message);
-                })
-                .finally(() => {
-                    redirectCheckDone = true;
-                    checkDone();
-                });
-        } else {
-            redirectCheckDone = true;
-            checkDone();
-        }
+        // Check for redirect result (legacy/mobile flow)
+        getRedirectResult(auth)
+            .then((result) => {
+                if (result) {
+                    addLog(`Redirect Success: ${result.user.uid}`);
+                    setUser(result.user);
+                } else {
+                    addLog("Redirect Result: null");
+                }
+            })
+            .catch((err) => {
+                addLog(`Redirect Error: ${err.message}`);
+                setAuthError(err.message);
+            });
 
         return () => unsubscribe();
     }, []);
 
     const signInWithGoogle = async () => {
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        addLog(`Sign in requested. Mobile: ${isMobile}`);
-        if (isMobile) {
-            await signInWithGoogleRedirect();
-        } else {
-            await signInWithGooglePopup();
-        }
+        // Default to Popup for stability unless explicitly mobile AND secure
+        // But user reported redirect fails everywhere. 
+        // Let's try to trust the platform default via a simple toggle or just use Popup by default
+        // as requested by the user's latest "it works" comment for popup.
+        await signInWithGooglePopup();
     };
 
     const signInWithGoogleRedirect = async () => {
         try {
-            addLog("Starting Google Redirect...");
-            await setPersistence(auth, browserLocalPersistence);
+            addLog("Starting Redirect...");
             await signInWithRedirect(auth, googleProvider);
         } catch (error: any) {
-            addLog(`Error starting Google redirect: ${error.message}`);
+            addLog(`Redirect Start Error: ${error.message}`);
             setAuthError(error.message);
-            throw error;
         }
     };
 
     const signInWithGooglePopup = async () => {
         try {
-            addLog("Starting Google Popup...");
-            await setPersistence(auth, browserLocalPersistence);
+            addLog("Starting Popup...");
             await signInWithPopup(auth, googleProvider);
         } catch (error: any) {
-            addLog(`Error starting Google popup: ${error.message}`);
+            addLog(`Popup Error: ${error.message}`);
             setAuthError(error.message);
-            throw error;
         }
     };
 

@@ -35,14 +35,14 @@ export default function LoginPage() {
     if (user) return null;
 
     return (
-        <div className="relative min-h-screen w-full flex flex-col items-center justify-between overflow-hidden bg-[#0a0f0a] px-6 py-12">
+        <div className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-[#0a0f0a] px-6 py-8 gap-12">
 
             {/* Ambient green glows */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-[var(--color-primary)]/10 rounded-full blur-[150px] -translate-y-1/2" />
             <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-[var(--color-primary)]/5 rounded-full blur-[120px]" />
 
             {/* Top Section - Logo and Tagline */}
-            <div className="relative z-10 flex flex-col items-center pt-8">
+            <div className="relative z-10 flex flex-col items-center">
 
                 {/* Logo */}
                 <motion.div

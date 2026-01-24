@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { WorkoutSession, Exercise, Routine } from '@/lib/db'; // Keep interfaces
 import { updateSession, updateRoutine, addUserRoutine } from '@/lib/firestore'; // Firestore actions
 import { useExercises, useRoutines } from '@/hooks/useFirestore'; // Firestore hooks
-import { ChevronLeft, MoreHorizontal, Plus, FileText, X, Dumbbell, Check } from 'lucide-react';
+import { ChevronLeft, MoreHorizontal, Plus, FileText, X, Dumbbell, Check, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExerciseListCard } from './ExerciseListCard';
+import { SwipeableRow } from './SwipeableRow';
+import { ConfirmModal } from './ConfirmModal';
 import { useAuth } from '@/context/AuthContext';
 
 interface ActiveWorkoutViewProps {
@@ -23,6 +25,7 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     const [notes, setNotes] = useState(session.notes || '');
     const [showNameModal, setShowNameModal] = useState(false);
     const [newRoutineName, setNewRoutineName] = useState('');
+    const [deleteExerciseId, setDeleteExerciseId] = useState<string | null>(null);
 
     // Load data hooks
     const { exercises: allExercises } = useExercises();
@@ -35,7 +38,9 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
     const exerciseIds = session.entries.map(e => String(e.exerciseId));
 
     // Filter exercises used in this session
-    const exercises = allExercises.filter(e => exerciseIds.includes(String(e.id)));
+    const exercises = allExercises
+        .filter(e => exerciseIds.includes(String(e.id)))
+        .sort((a, b) => exerciseIds.indexOf(String(a.id)) - exerciseIds.indexOf(String(b.id)));
 
     // Exercises not in current session
     const availableExercises = allExercises.filter(e => !exerciseIds.includes(String(e.id)));
@@ -204,21 +209,38 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
                     </div>
 
                     {exercises.length > 0 ? (
-                        exercises.map((exercise) => {
-                            const entry = session.entries.find(e => e.exerciseId === exercise!.id);
-                            const isStarted = !!entry;
-                            const isCompleted = entry?.sets.every(s => s.isCompleted) && entry?.sets.length >= exercise!.targetSets;
+                        <Reorder.Group
+                            values={exercises}
+                            onReorder={async (newOrder) => {
+                                // Optimistic update not easily possible without local state for `exercises`
+                                // But `exercises` here is derived from `allExercises` + `session.entries` order.
+                                // We need to reorder `session.entries`.
 
-                            return (
-                                <ExerciseListCard
+                                const newExerciseIds = newOrder.map(e => String(e.id));
+
+                                // Re-sort entries according to new exercise order
+                                const newEntries = [...session.entries].sort((a, b) => {
+                                    return newExerciseIds.indexOf(String(a.exerciseId)) - newExerciseIds.indexOf(String(b.exerciseId));
+                                });
+
+                                // We should strictly update specific entry positions corresponding to the drag, 
+                                // but sorting entries by the new exercise visual order is the intended effect.
+
+                                await updateSession(user!.uid, String(session.id), { entries: newEntries });
+                            }}
+                            className="space-y-4"
+                        >
+                            {exercises.map((exercise) => (
+                                <DraggableActiveExerciseItem
                                     key={exercise!.id}
-                                    exercise={exercise!}
-                                    status={isCompleted ? 'completed' : isStarted ? 'active' : 'pending'}
-                                    lastLog="80kg x 8"
-                                    onClick={() => navigateToExercise(exercise!.id)}
+                                    exercise={exercise}
+                                    session={session}
+                                    user={user}
+                                    setDeleteExerciseId={setDeleteExerciseId}
+                                    navigateToExercise={navigateToExercise}
                                 />
-                            );
-                        })
+                            ))}
+                        </Reorder.Group>
                     ) : (
                         <div className="text-center py-8 text-[var(--color-text-muted)] border border-dashed border-[#1f3a2f] rounded-xl">
                             <Dumbbell size={32} className="mx-auto mb-2 opacity-30" />
@@ -509,6 +531,64 @@ export function ActiveWorkoutView({ session }: ActiveWorkoutViewProps) {
                     </>
                 )}
             </AnimatePresence>
-        </div>
+
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={!!deleteExerciseId}
+                onClose={() => setDeleteExerciseId(null)}
+                onConfirm={async () => {
+                    if (!deleteExerciseId || !user) return;
+                    const newEntries = session.entries.filter(e => String(e.exerciseId) !== String(deleteExerciseId));
+                    await updateSession(user.uid, String(session.id), { entries: newEntries });
+                    setDeleteExerciseId(null);
+                }}
+                title="¿Quitar ejercicio?"
+                message="Se eliminará este ejercicio y sus series de la sesión actual."
+                confirmText="Quitar"
+                cancelText="Cancelar"
+                variant="warning"
+            />
+        </div >
+    );
+}
+
+function DraggableActiveExerciseItem({ exercise, session, user, setDeleteExerciseId, navigateToExercise }: any) {
+    const controls = useDragControls();
+
+    const entry = session.entries.find((e: any) => e.exerciseId === exercise!.id);
+    const isStarted = !!entry;
+    const isCompleted = entry?.sets.every((s: any) => s.isCompleted) && entry?.sets.length >= exercise!.targetSets;
+
+    return (
+        <Reorder.Item
+            value={exercise}
+            style={{ listStyle: 'none' }}
+            dragListener={false}
+            dragControls={controls}
+        >
+            <SwipeableRow
+                onDelete={() => {
+                    setDeleteExerciseId(String(exercise!.id));
+                }}
+            >
+                <div className="flex items-center gap-2">
+                    <div
+                        className="cursor-grab active:cursor-grabbing text-[var(--color-text-muted)] opacity-50 hover:opacity-100 p-2 -m-2 touch-none"
+                        onPointerDown={(e) => controls.start(e)}
+                    >
+                        <GripVertical size={20} />
+                    </div>
+                    <div className="flex-1">
+                        <ExerciseListCard
+                            exercise={exercise!}
+                            status={isCompleted ? 'completed' : isStarted ? 'active' : 'pending'}
+                            lastLog="80kg x 8"
+                            onClick={() => navigateToExercise(exercise!.id)}
+                        />
+                    </div>
+                </div>
+            </SwipeableRow>
+        </Reorder.Item>
     );
 }

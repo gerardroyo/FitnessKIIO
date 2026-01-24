@@ -57,7 +57,7 @@ export function useRoutines() {
             return;
         }
 
-        const q = query(collection(firestore, `users/${user.uid}/routines`));
+        const q = query(collection(firestore, `users/${user.uid}/routines`), orderBy('order', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({
                 id: doc.id,

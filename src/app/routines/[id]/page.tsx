@@ -5,12 +5,12 @@ import { useRoutines, useExercises } from '@/hooks/useFirestore';
 import { updateRoutine } from '@/lib/firestore';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { use, useState } from 'react';
-import { ArrowLeft, Plus, X, Check, Pencil, Dumbbell, ChevronRight } from 'lucide-react';
+import { use, useState, useEffect } from 'react';
+import { ArrowLeft, Plus, X, Check, Pencil, Dumbbell, ChevronRight, GripVertical } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 
 interface RoutineEditPageProps {
     params: Promise<{ id: string }>;
@@ -35,7 +35,27 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
 
     // Get exercises in this routine
     const exerciseIds = routine?.exerciseIds.map(String) || [];
-    const routineExercises = allExercises.filter(e => exerciseIds.includes(String(e.id)));
+    const routineExercises = allExercises
+        .filter(e => exerciseIds.includes(String(e.id)))
+        .sort((a, b) => exerciseIds.indexOf(String(a.id)) - exerciseIds.indexOf(String(b.id)));
+
+    // Local state for drag and drop to prevent flickering
+    const [items, setItems] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (routineExercises.length > 0) {
+            // Only update if the *content* has changed (added/removed items), 
+            // ignoring order changes to prevent fighting with local drag state.
+            const currentIds = items.map(i => i.id).sort().join(',');
+            const remoteIds = routineExercises.map(i => i.id).sort().join(',');
+
+            if (items.length === 0 || currentIds !== remoteIds) {
+                // If the set of items is different, we must sync.
+                // We trust routineExercises (sorted by routine.exerciseIds) for the new order.
+                setItems(routineExercises);
+            }
+        }
+    }, [routineExercises]);
 
     // Exercises not yet in this routine
     const availableExercises = allExercises.filter(
@@ -133,27 +153,26 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
 
                         {routineExercises && routineExercises.length > 0 ? (
                             <div className="space-y-2">
-                                <AnimatePresence mode="popLayout">
-                                    {routineExercises.map((exercise, idx) => (
-                                        <motion.div
+                                <Reorder.Group
+                                    values={items}
+                                    onReorder={(newOrder) => {
+                                        setItems(newOrder); // Update local state immediately
+                                    }}
+                                    className="space-y-2"
+                                >
+                                    {items.map((exercise, idx) => (
+                                        <DraggableRoutineItem
                                             key={exercise.id}
-                                            layout
-                                            exit={{ opacity: 0, x: -100, transition: { duration: 0.2 } }}
-                                        >
-                                            <SwipeableRow onDelete={() => setDeleteExerciseModal({ isOpen: true, id: String(exercise.id) })}>
-                                                <div className="p-4 flex items-center gap-4">
-                                                    <span className="w-6 h-6 rounded-full bg-[#1f3a2f] text-[var(--color-primary)] text-xs font-bold flex items-center justify-center">
-                                                        {idx + 1}
-                                                    </span>
-                                                    <div className="flex-1">
-                                                        <p className="font-medium text-white">{exercise.name}</p>
-                                                        <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
-                                                    </div>
-                                                </div>
-                                            </SwipeableRow>
-                                        </motion.div>
+                                            exercise={exercise}
+                                            index={idx}
+                                            items={items}
+                                            setDeleteExerciseModal={setDeleteExerciseModal}
+                                            updateRoutine={updateRoutine}
+                                            user={user}
+                                            routine={routine}
+                                        />
                                     ))}
-                                </AnimatePresence>
+                                </Reorder.Group>
                             </div>
                         ) : (
                             <div className="text-center py-8 text-[var(--color-text-muted)] border border-dashed border-[#1f3a2f] rounded-xl">
@@ -241,5 +260,49 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
                 </AnimatePresence>
             </div>
         </ProtectedRoute>
+    );
+}
+
+function DraggableRoutineItem({ exercise, index, items, setDeleteExerciseModal, updateRoutine, user, routine }: any) {
+    const controls = useDragControls();
+
+    return (
+        <Reorder.Item
+            value={exercise}
+            style={{ listStyle: 'none' }}
+            dragListener={false}
+            dragControls={controls}
+            onDragEnd={async () => {
+                if (user && routine) {
+                    const newIds = items.map((e: any) => String(e.id));
+                    await updateRoutine(user.uid, String(routine.id), { exerciseIds: newIds });
+                }
+            }}
+        >
+            <motion.div
+                layout
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+            >
+                <SwipeableRow onDelete={() => setDeleteExerciseModal({ isOpen: true, id: String(exercise.id) })}>
+                    <div className="p-4 flex items-center gap-4 bg-[var(--color-surface)] rounded-xl border border-[rgba(255,255,255,0.05)]">
+                        <div
+                            className="text-[var(--color-text-muted)] cursor-grab active:cursor-grabbing p-2 -m-2 touch-none"
+                            onPointerDown={(e) => controls.start(e)}
+                        >
+                            <GripVertical size={20} />
+                        </div>
+                        <span className="w-6 h-6 rounded-full bg-[#1f3a2f] text-[var(--color-primary)] text-xs font-bold flex items-center justify-center shrink-0">
+                            {index + 1}
+                        </span>
+                        <div className="flex-1">
+                            <p className="font-medium text-white">{exercise.name}</p>
+                            <p className="text-xs text-[var(--color-text-muted)]">{exercise.muscleGroup}</p>
+                        </div>
+                    </div>
+                </SwipeableRow>
+            </motion.div>
+        </Reorder.Item>
     );
 }

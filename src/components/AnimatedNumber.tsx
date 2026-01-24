@@ -13,7 +13,7 @@ interface AnimatedNumberProps {
 // Single digit with slide animation
 function AnimatedDigit({ digit, direction }: { digit: string; direction: 1 | -1 }) {
     return (
-        <span className="relative inline-block overflow-hidden" style={{ width: digit === '.' ? '0.3em' : '0.6em', height: '1.2em' }}>
+        <span className="relative inline-block overflow-hidden" style={{ width: digit === '.' ? '0.3em' : '0.75em', height: '1.3em' }}>
             <AnimatePresence mode="popLayout" initial={false}>
                 <motion.span
                     key={digit}

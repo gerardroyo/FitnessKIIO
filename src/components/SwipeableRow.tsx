@@ -7,15 +7,16 @@ interface SwipeableRowProps {
     children: React.ReactNode;
     onDelete: () => void;
     threshold?: number;
+    disabled?: boolean;
 }
 
-export function SwipeableRow({ children, onDelete, threshold = 100 }: SwipeableRowProps) {
+export function SwipeableRow({ children, onDelete, threshold = 100, disabled = false }: SwipeableRowProps) {
     const x = useMotionValue(0);
     const deleteOpacity = useTransform(x, [-threshold, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-threshold, -50, 0], [1, 0.8, 0.5]);
 
     const handleDragEnd = (_: any, info: PanInfo) => {
-        if (info.offset.x < -threshold) {
+        if (!disabled && info.offset.x < -threshold) {
             onDelete();
         }
     };
@@ -34,7 +35,7 @@ export function SwipeableRow({ children, onDelete, threshold = 100 }: SwipeableR
 
             {/* Swipeable content */}
             <motion.div
-                drag="x"
+                drag={disabled ? false : "x"}
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={{ left: 0.5, right: 0 }}
                 onDragEnd={handleDragEnd}

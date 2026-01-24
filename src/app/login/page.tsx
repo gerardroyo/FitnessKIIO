@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
-import { Zap, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import Image from 'next/image';
 
 export default function LoginPage() {
     const { user, loading, signInWithGoogle, authError } = useAuth();
@@ -37,22 +38,34 @@ export default function LoginPage() {
         <div className="relative min-h-screen w-full flex flex-col items-center justify-between overflow-hidden bg-[#0a0f0a] px-6 py-12">
 
             {/* Ambient green glows */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-emerald-500/8 rounded-full blur-[150px] -translate-y-1/2" />
-            <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-emerald-500/5 rounded-full blur-[120px]" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-[var(--color-primary)]/10 rounded-full blur-[150px] -translate-y-1/2" />
+            <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-[var(--color-primary)]/5 rounded-full blur-[120px]" />
 
             {/* Top Section - Logo and Tagline */}
             <div className="relative z-10 flex flex-col items-center pt-8">
 
-                {/* Lightning Icon */}
+                {/* Logo */}
                 <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                     className="mb-8"
                 >
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/40">
-                        <Zap className="w-7 h-7 text-[#0a0f0a]" fill="#0a0f0a" strokeWidth={0} />
-                    </div>
+                    <motion.div
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                        className="relative w-24 h-24 rounded-3xl overflow-hidden"
+                        style={{
+                            boxShadow: '0 10px 40px -10px rgba(0, 255, 128, 0.3), 0 0 20px rgba(0, 255, 128, 0.1)'
+                        }}
+                    >
+                        <Image
+                            src="/icon.png"
+                            alt="FitnessKIIO Logo"
+                            fill
+                            className="object-cover"
+                        />
+                    </motion.div>
                 </motion.div>
 
                 {/* Brand Name */}
@@ -64,10 +77,10 @@ export default function LoginPage() {
                 >
                     <h1 className="text-[2rem] font-bold tracking-tight">
                         <span className="text-white">Fitness</span>
-                        <span className="text-emerald-400 italic font-bold">KIIO</span>
+                        <span className="text-[var(--color-primary)] italic font-bold">KIIO</span>
                     </h1>
                     {/* Green underline */}
-                    <div className="w-8 h-[3px] bg-emerald-500 rounded-full mt-3" />
+                    <div className="w-8 h-[3px] bg-[var(--color-primary)] rounded-full mt-3" />
                 </motion.div>
 
                 {/* Tagline */}
@@ -78,10 +91,10 @@ export default function LoginPage() {
                     className="flex flex-col items-center gap-3"
                 >
                     <p className="text-zinc-400 text-lg">
-                        Entrena con precisión.
+                        Consistencia es la clave.
                     </p>
                     <p className="text-[11px] uppercase tracking-[0.25em] text-zinc-600 font-medium">
-                        Premium Experience
+                        Tu compañero personal
                     </p>
                 </motion.div>
             </div>
@@ -105,13 +118,13 @@ export default function LoginPage() {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
-                    whileHover={{ scale: 1.02 }}
+                    whileHover={{ scale: 1.02, boxShadow: '0 0 40px rgba(0, 255, 128, 0.6)' }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleGoogleSignIn}
                     disabled={isSigningIn}
-                    className="relative w-full h-14 bg-emerald-500 hover:bg-emerald-400 rounded-full font-semibold text-black flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-6 border-2 border-emerald-400/50"
+                    className="relative w-full h-14 bg-[var(--color-primary)] hover:opacity-90 rounded-full font-semibold text-black flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-20 border-2 border-[var(--color-primary)]/50"
                     style={{
-                        boxShadow: '0 0 30px rgba(16, 185, 129, 0.5), 0 0 60px rgba(16, 185, 129, 0.3), 0 0 100px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255,255,255,0.15)'
+                        boxShadow: '0 0 30px rgba(0, 255, 128, 0.4), 0 0 60px rgba(0, 255, 128, 0.2), inset 0 1px 0 rgba(255,255,255,0.2)'
                     }}
                 >
                     {isSigningIn ? (
@@ -135,34 +148,6 @@ export default function LoginPage() {
                         </>
                     )}
                 </motion.button>
-
-                {/* Alternative access text */}
-                <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="text-[11px] uppercase tracking-[0.2em] text-zinc-600 font-medium mb-5"
-                >
-                    O accede con tu cuenta
-                </motion.p>
-
-                {/* Alternative login options */}
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.5 }}
-                    className="flex gap-4"
-                >
-                    {/* Email button */}
-                    <button className="w-14 h-14 rounded-full border border-zinc-700 bg-transparent flex items-center justify-center hover:border-zinc-500 hover:bg-zinc-900/50 transition-all">
-                        <Mail className="w-5 h-5 text-zinc-400" />
-                    </button>
-
-                    {/* iOS button */}
-                    <button className="w-14 h-14 rounded-full border border-zinc-700 bg-transparent flex items-center justify-center hover:border-zinc-500 hover:bg-zinc-900/50 transition-all">
-                        <span className="text-zinc-400 text-sm font-medium">iOS</span>
-                    </button>
-                </motion.div>
             </div>
 
             {/* Footer */}
@@ -173,7 +158,7 @@ export default function LoginPage() {
                 className="relative z-10"
             >
                 <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-700 font-medium">
-                    Optimizado para atletas • V2.0
+                    v1.1
                 </p>
             </motion.div>
         </div>

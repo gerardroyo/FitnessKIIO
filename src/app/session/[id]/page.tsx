@@ -146,8 +146,8 @@ export default function SessionPage({ params }: SessionPageProps) {
                                         <div className="px-4 pb-4 space-y-2">
                                             <div className="grid grid-cols-3 text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider pb-2 border-b border-[rgba(255,255,255,0.05)]">
                                                 <span>Serie</span>
-                                                <span className="text-center">Peso</span>
-                                                <span className="text-right">Reps</span>
+                                                <span className="text-center">Reps</span>
+                                                <span className="text-right">Peso</span>
                                             </div>
                                             {entry.sets.map((set, sIdx) => (
                                                 <div
@@ -155,8 +155,8 @@ export default function SessionPage({ params }: SessionPageProps) {
                                                     className={`grid grid-cols-3 py-2 ${set.isCompleted ? '' : 'opacity-40'}`}
                                                 >
                                                     <span className="text-[var(--color-text-muted)]">{sIdx + 1}</span>
-                                                    <span className="text-center font-mono font-bold">{set.weight} kg</span>
-                                                    <span className="text-right font-mono font-bold">{set.reps}</span>
+                                                    <span className="text-center font-mono font-bold">{set.reps}</span>
+                                                    <span className="text-right font-mono font-bold">{set.weight} kg</span>
                                                 </div>
                                             ))}
                                         </div>

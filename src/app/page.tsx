@@ -13,12 +13,16 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import LoadingScreen from '@/components/LoadingScreen';
+
+// ... (existing imports)
+
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [showRoutineSelector, setShowRoutineSelector] = useState(false);
   const [showNoRoutinesModal, setShowNoRoutinesModal] = useState(false);
   const { user } = useAuth();
-  const router = useRouter(); // Need router for redirect
+  const router = useRouter();
 
   // Use Firestore Hooks
   const { session, loading: sessionLoading } = useActiveSession();
@@ -66,17 +70,15 @@ export default function Home() {
     if (!user) return;
 
     // Pre-populate entries with routine exercises
-    // routine.exerciseIds are numbers or strings. 
-    // If they are from Firestore, they are strings.
     const entries = routine.exerciseIds.map(exerciseId => ({
-      exerciseId: String(exerciseId), // Ensure string
+      exerciseId: String(exerciseId),
       sets: []
     }));
 
     try {
       await saveSession(user.uid, {
         name: routine.name,
-        routineId: Number(routine.id) ? undefined : String(routine.id), // Store string ID if possible
+        routineId: Number(routine.id) ? undefined : String(routine.id),
         startTime: Date.now(),
         state: 'active',
         durationSeconds: 0,
@@ -89,16 +91,7 @@ export default function Home() {
   };
 
   if (!isClient || isLoading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-gray-400">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-black flex items-center justify-center overflow-hidden border border-[var(--color-primary)]/20 animate-pulse">
-            <img src="/icon-512.png" alt="Loading..." className="w-full h-full object-cover" />
-          </div>
-          <p className="text-sm font-medium text-[var(--color-primary)] animate-pulse">FitnessKIIO</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (

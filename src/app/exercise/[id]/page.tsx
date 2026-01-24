@@ -10,6 +10,8 @@ import { SetInputPanel } from '@/components/SetInputPanel';
 import { ChevronLeft, MoreHorizontal, Timer, Edit2, Check, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MobileLayout } from '@/components/MobileLayout';
+import { SwipeableRow } from '@/components/SwipeableRow';
+import { ConfirmModal } from '@/components/ConfirmModal';
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -41,6 +43,7 @@ function ExerciseDetailLogic({ session, exercise, router, userId }: { session: W
     // State for Sets
     const entry = session.entries.find(e => String(e.exerciseId) === String(exercise.id));
     const [sets, setSets] = useState<SetEntry[]>([]);
+    const [deleteSetIndex, setDeleteSetIndex] = useState<number | null>(null);
 
     // Timer State
     const [restTimer, setRestTimer] = useState(0);
@@ -276,51 +279,68 @@ function ExerciseDetailLogic({ session, exercise, router, userId }: { session: W
                         const prevSet = previousSessionData?.sets[idx];
 
                         return (
-                            <div
+                            <SwipeableRow
                                 key={idx}
-                                className={cn(
-                                    "rounded-xl p-4 flex items-center justify-between border transition-all",
-                                    isActive
-                                        ? "border-[var(--color-primary)] bg-[rgba(0,255,128,0.05)] shadow-[0_0_15px_rgba(0,255,128,0.1)]"
-                                        : isDone
-                                            ? "border-transparent bg-[var(--color-surface)] opacity-80"
-                                            : "border-dashed border-[#1f3a2f] bg-transparent opacity-50"
-                                )}
+                                onDelete={() => setDeleteSetIndex(idx)}
                             >
-                                <div className="flex items-center gap-4">
-                                    <div className={cn(
-                                        "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
-                                        isActive ? "bg-[var(--color-primary)] text-black" :
-                                            isDone ? "bg-[#1f3a2f] text-[var(--color-primary)]" : "bg-[#1f3a2f] text-[var(--color-text-muted)]"
-                                    )}>
-                                        {idx + 1}
+                                <div
+                                    onClick={isDone ? async () => {
+                                        // Toggle completion off to edit
+                                        const newSets = [...sets];
+                                        newSets[idx] = { ...newSets[idx], isCompleted: false };
+                                        setSets(newSets);
+                                        // Update DB
+                                        const existingEntryIndex = session.entries.findIndex(e => String(e.exerciseId) === String(exercise.id));
+                                        const newEntry = { exerciseId: String(exercise.id), sets: newSets };
+                                        let newEntries = [...session.entries];
+                                        if (existingEntryIndex >= 0) newEntries[existingEntryIndex] = newEntry;
+                                        if (userId) await updateSession(userId, String(session.id), { entries: newEntries });
+                                    } : undefined}
+                                    className={cn(
+                                        "rounded-xl p-4 flex items-center justify-between border transition-all cursor-pointer bg-[var(--color-surface)]",
+                                        isActive
+                                            ? "border-[var(--color-primary)] bg-[rgba(0,255,128,0.05)] shadow-[0_0_15px_rgba(0,255,128,0.1)]"
+                                            : isDone
+                                                ? "border-transparent opacity-80"
+                                                : "border-dashed border-[#1f3a2f] bg-transparent opacity-50"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={cn(
+                                            "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
+                                            isActive ? "bg-[var(--color-primary)] text-black" :
+                                                isDone ? "bg-[#1f3a2f] text-[var(--color-primary)]" : "bg-[#1f3a2f] text-[var(--color-text-muted)]"
+                                        )}>
+                                            {idx + 1}
+                                        </div>
+                                        <div>
+                                            <p className={cn("font-bold", isDone && "text-[var(--color-text-muted)]")}>
+                                                {isDone ? "Completado" : isActive ? "Serie Actual" : "Pendiente"}
+                                            </p>
+                                            <p className="text-xs text-[var(--color-text-muted)]">
+                                                {isDone
+                                                    ? `${set.weight} kg x ${set.reps} reps`
+                                                    : prevSet
+                                                        ? `Anterior: ${prevSet.weight} kg x ${prevSet.reps}`
+                                                        : `Objetivo: ${set.weight} kg x ${set.reps}`
+                                                }
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className={cn("font-bold", isDone && "text-[var(--color-text-muted)]")}>
-                                            {isDone ? "Completado" : isActive ? "Serie Actual" : "Pendiente"}
-                                        </p>
-                                        <p className="text-xs text-[var(--color-text-muted)]">
-                                            {isDone
-                                                ? `${set.weight} kg x ${set.reps} reps`
-                                                : prevSet
-                                                    ? `Anterior: ${prevSet.weight} kg x ${prevSet.reps}`
-                                                    : `Objetivo: ${set.weight} kg x ${set.reps}`
-                                            }
-                                        </p>
-                                    </div>
-                                </div>
 
-                                {isDone ? (
-                                    <div className="w-6 h-6 rounded-full bg-[var(--color-primary)] flex items-center justify-center">
-                                        <Check size={14} className="text-black" strokeWidth={3} />
-                                    </div>
-                                ) : isActive && (
-                                    <div className="w-8 h-8 bg-[var(--color-surface-hover)] rounded-lg flex items-center justify-center">
-                                        <Edit2 size={16} />
-                                    </div>
-                                )}
-                            </div>
+                                    {isDone ? (
+                                        <div className="w-6 h-6 rounded-full bg-[var(--color-primary)] flex items-center justify-center">
+                                            <Check size={14} className="text-black" strokeWidth={3} />
+                                        </div>
+                                    ) : isActive && (
+                                        <div className="w-8 h-8 bg-[var(--color-surface-hover)] rounded-lg flex items-center justify-center">
+                                            <Edit2 size={16} />
+                                        </div>
+                                    )}
+                                </div>
+                            </SwipeableRow>
                         );
+
                     })}
 
                     <button
@@ -343,6 +363,29 @@ function ExerciseDetailLogic({ session, exercise, router, userId }: { session: W
                     />
                 </div>
             )}
+            {/* Set Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={deleteSetIndex !== null}
+                onClose={() => setDeleteSetIndex(null)}
+                onConfirm={async () => {
+                    if (deleteSetIndex === null) return;
+                    const newSets = sets.filter((_, i) => i !== deleteSetIndex);
+                    setSets(newSets);
+
+                    const existingEntryIndex = session.entries.findIndex(e => String(e.exerciseId) === String(exercise.id));
+                    const newEntry = { exerciseId: String(exercise.id), sets: newSets };
+                    let newEntries = [...session.entries];
+                    if (existingEntryIndex >= 0) newEntries[existingEntryIndex] = newEntry;
+
+                    if (userId) await updateSession(userId, String(session.id), { entries: newEntries });
+                    setDeleteSetIndex(null);
+                }}
+                title="¿Eliminar serie?"
+                message="Esta acción no se puede deshacer."
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="warning"
+            />
         </div>
     );
 }

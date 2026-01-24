@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { getUserSessions } from '@/lib/firestore';
 import { useAuth } from '@/context/AuthContext';
+import { formatDuration } from '@/lib/utils';
 import { ArrowLeft, ChevronLeft, ChevronRight, Activity, Calendar as CalendarIcon, Clock, Trophy, Flame, AlertTriangle } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 
@@ -156,21 +157,30 @@ export default function ConsistencyPage() {
                                 const intensity = getDayIntensity(day);
                                 const isSelected = selectedDate?.getDate() === day && selectedDate?.getMonth() === month && selectedDate?.getFullYear() === year;
 
+                                const hasSession = getSessionsForDate(day).length > 0;
+                                const hasNextSession = getSessionsForDate(day + 1).length > 0;
+
+                                // Grid position to determine if it's the end of a row
+                                const gridIndex = firstDay + i;
+                                const isEndOfRow = (gridIndex + 1) % 7 === 0;
+                                const showConnector = hasSession && hasNextSession && !isEndOfRow;
+
                                 let bgClass = "bg-[#1f3a2f]/30 hover:bg-[#1f3a2f]";
                                 if (intensity === 1) bgClass = "bg-[#00ff80]/30 hover:bg-[#00ff80]/40";
                                 if (intensity === 2) bgClass = "bg-[#00ff80]/60 hover:bg-[#00ff80]/70";
-                                if (intensity === 3) bgClass = "bg-[#00ff80] hover:bg-[#00ff80]/90 text-black";
+                                if (intensity >= 3) bgClass = "bg-[#00ff80] hover:bg-[#00ff80]/90 text-black";
 
                                 if (isSelected) bgClass = "ring-2 ring-white z-10 " + bgClass;
 
                                 return (
-                                    <button
-                                        key={day}
-                                        onClick={() => setSelectedDate(new Date(year, month, day))}
-                                        className={`aspect-square rounded-xl flex items-center justify-center font-bold text-sm transition-all ${bgClass}`}
-                                    >
-                                        {day}
-                                    </button>
+                                    <div key={day} className="relative">
+                                        <button
+                                            onClick={() => setSelectedDate(new Date(year, month, day))}
+                                            className={`w-full aspect-square rounded-xl flex items-center justify-center font-bold text-sm transition-all relative z-10 ${bgClass}`}
+                                        >
+                                            {day}
+                                        </button>
+                                    </div>
                                 );
                             })}
                         </div>
@@ -192,6 +202,7 @@ export default function ConsistencyPage() {
                             </div>
                         )}
 
+
                         <div className="space-y-3">
                             {selectedSessions.map(session => (
                                 <div key={session.id} className="bg-[var(--color-surface)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
@@ -199,7 +210,7 @@ export default function ConsistencyPage() {
                                         <p className="font-bold text-lg">{session.name}</p>
                                         <div className="flex items-center gap-1 text-xs font-bold text-[var(--color-primary)] bg-[var(--color-primary)]/10 px-2 py-1 rounded-lg">
                                             <Clock size={12} />
-                                            {Math.round((session.durationSeconds || 0) / 60)} min
+                                            {formatDuration(session.durationSeconds || 0)}
                                         </div>
                                     </div>
                                     <div className="text-sm text-[var(--color-text-muted)]">

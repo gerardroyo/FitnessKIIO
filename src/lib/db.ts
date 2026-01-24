@@ -15,6 +15,7 @@ export interface Routine {
     id: number | string;
     name: string;
     exerciseIds: (number | string)[];
+    order?: number;
 }
 
 export interface SetEntry {

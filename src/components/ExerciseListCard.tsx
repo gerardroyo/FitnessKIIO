@@ -57,14 +57,14 @@ export function ExerciseListCard({ exercise, status, lastLog, onClick }: Exercis
                 />
             )}
 
-            <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
                     {/* Checkbox State */}
                     <motion.div
                         animate={justCompleted ? { rotate: [0, 10, -10, 0], scale: [1, 1.2, 1] } : {}}
                         transition={{ duration: 0.4 }}
                         className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                            "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-colors",
                             status === 'completed' ? "bg-[var(--color-primary)] text-black" :
                                 status === 'active' ? "border-2 border-[var(--color-text-muted)]" :
                                     "border-2 border-[#1f3a2f]"

@@ -172,10 +172,10 @@ export const seedDefaultExercises = async (userId: string) => {
     if (existing.length > 0) return;
 
     const defaults = [
-        { name: 'Press de Banca Plano', muscleGroup: 'Pecho', equipmentType: 'barbell', defaultRestSeconds: 120, targetSets: 4, targetRepsRange: '8-10' },
+        { name: 'Press de Banca Plano', muscleGroup: 'Pecho', equipmentType: 'barbell', defaultRestSeconds: 120, targetSets: 3, targetRepsRange: '8-10' },
         { name: 'Press Militar con Barra', muscleGroup: 'Hombro', equipmentType: 'barbell', defaultRestSeconds: 90, targetSets: 3, targetRepsRange: '10' },
         { name: 'Aperturas con Mancuernas', muscleGroup: 'Pecho', equipmentType: 'dumbbell', defaultRestSeconds: 60, targetSets: 3, targetRepsRange: '12' },
-        { name: 'Elevaciones Laterales', muscleGroup: 'Hombro', equipmentType: 'dumbbell', defaultRestSeconds: 60, targetSets: 4, targetRepsRange: '15' },
+        { name: 'Elevaciones Laterales', muscleGroup: 'Hombro', equipmentType: 'dumbbell', defaultRestSeconds: 60, targetSets: 3, targetRepsRange: '15' },
         { name: 'Press Francés', muscleGroup: 'Tríceps', equipmentType: 'barbell', defaultRestSeconds: 60, targetSets: 3, targetRepsRange: '10-12' },
         { name: 'Extensiones de Tríceps en Polea', muscleGroup: 'Tríceps', equipmentType: 'cable', defaultRestSeconds: 60, targetSets: 3, targetRepsRange: '12-15' },
     ];

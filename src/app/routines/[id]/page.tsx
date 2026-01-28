@@ -28,7 +28,7 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
         id: null
     });
 
-    const { routines } = useRoutines();
+    const { routines, loading: routinesLoading } = useRoutines();
     const { exercises: allExercises } = useExercises();
 
     const routine = routines.find(r => String(r.id) === id);
@@ -91,10 +91,21 @@ export default function RoutineEditPage({ params }: RoutineEditPageProps) {
         }
     };
 
-    if (!routine) {
+    // Show loading only while fetching routines, not when routine doesn't exist yet
+    if (routinesLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center text-[var(--color-text-muted)]">
                 Cargando...
+            </div>
+        );
+    }
+
+    // If not loading but routine doesn't exist, redirect back
+    if (!routine) {
+        router.back();
+        return (
+            <div className="min-h-screen flex items-center justify-center text-[var(--color-text-muted)]">
+                Redirigiendo...
             </div>
         );
     }

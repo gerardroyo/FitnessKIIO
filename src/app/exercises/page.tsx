@@ -99,7 +99,7 @@ export default function ExercisesPage() {
                 muscleGroup: newMuscle,
                 equipmentType: 'dumbbell',
                 defaultRestSeconds: 90,
-                targetSets: 4,
+                targetSets: 3,
                 targetRepsRange: '8-12'
             });
             setNewName('');

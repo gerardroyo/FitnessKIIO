@@ -558,7 +558,8 @@ function DraggableActiveExerciseItem({ exercise, session, user, setDeleteExercis
 
     const entry = session.entries.find((e: any) => e.exerciseId === exercise!.id);
     const isStarted = !!entry;
-    const isCompleted = entry?.sets.every((s: any) => s.isCompleted) && entry?.sets.length >= exercise!.targetSets;
+    // Match completion logic with progress calculation (line 72-73)
+    const isCompleted = entry?.sets.some((s: any) => s.isCompleted) || false;
 
     return (
         <Reorder.Item

@@ -48,10 +48,15 @@ export default function RoutinesPage() {
         if (newName.trim() && user) {
             const id = await addUserRoutine(user.uid, {
                 name: newName.trim(),
-                exerciseIds: []
+                exerciseIds: [],
+                order: routines.length // Set order to avoid sorting issues
             });
             setNewName('');
             setIsCreating(false);
+
+            // Wait a short time for Firestore to sync before navigating
+            // This prevents the infinite loading state on the detail page
+            await new Promise(resolve => setTimeout(resolve, 500));
             router.push(`/routines/${id}`);
         }
     };
